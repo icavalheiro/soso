@@ -1,0 +1,46 @@
+name: Soso checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: src/Soso.Web/package-lock.json
+      - run: dotnet test tests/Soso.Api.Tests/Soso.Api.Tests.csproj --configuration Release
+      - run: dotnet list src/Soso.Api/Soso.Api.csproj package --vulnerable --include-transitive
+      - run: npm ci
+        working-directory: src/Soso.Web
+      - run: npm run build && npm run lint && npm audit --audit-level=moderate
+        working-directory: src/Soso.Web
+      - run: npx playwright install --with-deps chromium
+        working-directory: src/Soso.Web
+      - run: npx playwright test
+        working-directory: src/Soso.Web
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-test-results
+          path: src/Soso.Web/test-results
+      - run: docker build -t soso:ci .
+      - run: docker compose config --quiet
+        env:
+          DOMAIN: soso.example.test
+          BOOTSTRAP_EMAIL: admin@example.test
+          BOOTSTRAP_PASSWORD: configuration-validation-only
+      - run: >-
+          docker run --rm --user 101:101 --read-only
+          --tmpfs /tmp:rw,size=64m,mode=1777 --cap-drop ALL
+          --security-opt no-new-privileges --add-host soso:127.0.0.1
+          -v "$PWD/deploy/nginx.conf:/etc/nginx/nginx.conf:ro"
+          --entrypoint nginx nginx:stable-alpine -t
