@@ -136,6 +136,7 @@ public sealed class SecurityTests
         {
             var board = service.Create(new("Visible", ""), user);
             var tickets = tools.CreateTickets(board.Id, Enumerable.Range(0, 6).Select(index => new CreateTicketRequest(index == 0 ? "Needle title" : "Ticket " + index, board.Columns[0].Id)).ToArray());
+            Assert.Equal(tickets[0].Id, Assert.Single(tools.SearchTickets("needle").Tickets).Id);
             tools.UpdateTicket(board.Id, tickets[1].Id, Edit(tickets[1]) with { Description = "Needle description" });
             tools.UpdateTicket(board.Id, tickets[2].Id, Edit(tickets[2]) with { Subtasks = [new("task", "Needle subtask", false)] });
             tools.AddComment(board.Id, tickets[3].Id, "Needle comment");

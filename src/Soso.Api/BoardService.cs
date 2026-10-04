@@ -212,7 +212,7 @@ public sealed class BoardService(Store store)
                 .Where(ticket => boardIds.Contains(ticket.BoardId))
                 .Where(ticket => includeArchived || !ticket.Archived)
                 .Where(ticket => ticket.Title.Contains(text, StringComparison.OrdinalIgnoreCase)
-                    || ticket.Description.Contains(text, StringComparison.OrdinalIgnoreCase)
+                    || ticket.Description?.Contains(text, StringComparison.OrdinalIgnoreCase) == true
                     || ticket.Tags.Any(tag => tag.Contains(text, StringComparison.OrdinalIgnoreCase))
                     || ticket.Subtasks.Any(task => task.Title.Contains(text, StringComparison.OrdinalIgnoreCase))
                     || ticket.Comments.Any(comment => comment.Text.Contains(text, StringComparison.OrdinalIgnoreCase)))
