@@ -211,6 +211,33 @@ test( 'login, software tags and assignee filters', async ( { page } ) =>
 
 for ( const width of [ 1366, 390 ] )
 {
+    test( `ticket search matches IDs at ${ width }px`, async ( { page } ) =>
+    {
+        await page.setViewportSize( { width, height: 900 } );
+        const state = await installApiMock( page );
+        const ticket = state.data.tickets[ 2 ];
+        ticket.id = 'ab12cd34-ef56-7890-abcd-ef1234567890';
+        await page.goto( '/' );
+        await expect( page.locator( '.ticket' ) ).toHaveCount( 4 );
+        const search = page.getByRole( 'textbox', { name: 'Search tickets' } );
+        for ( const query of [ ticket.id, 'AB12CD34', 'ef56-7890' ] )
+        {
+            await search.fill( query );
+            await expect( page.locator( '.ticket' ) ).toHaveCount( 1 );
+            await expect( page.locator( '.ticket' ) ).toContainText( ticket.title );
+        }
+        await search.fill( 'nonexistent-ticket-id' );
+        await expect( page.locator( '.ticket' ) ).toHaveCount( 0 );
+        await search.fill( 'sprint' );
+        await expect( page.locator( '.ticket' ) ).toHaveCount( 1 );
+        await expect( page.locator( '.ticket' ) ).toContainText( 'Plan sprint goals' );
+        await search.fill( 'Cards sometimes jump' );
+        await expect( page.locator( '.ticket' ) ).toHaveCount( 1 );
+        await expect( page.locator( '.ticket' ) ).toContainText( ticket.title );
+        await search.fill( '' );
+        await expect( page.locator( '.ticket' ) ).toHaveCount( 4 );
+    } );
+
     test( `compact board header and filter dialog at ${ width }px`, async ( { page }, testInfo ) =>
     {
         await page.setViewportSize( { width, height: 900 } );

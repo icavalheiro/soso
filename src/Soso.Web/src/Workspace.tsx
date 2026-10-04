@@ -224,7 +224,7 @@ export default function Workspace ()
     const canManage = data?.board.ownerId === account.id || account.isAdmin;
     const filtered = data?.tickets.filter( ticket =>
     {
-        const matchesQuery = `${ ticket.title } ${ ticket.description }`.toLowerCase().includes( query.toLowerCase() );
+        const matchesQuery = `${ ticket.id } ${ ticket.title } ${ ticket.description }`.toLowerCase().includes( query.toLowerCase() );
         const matchesPriority = priority === 'all' || ticket.priority === priority;
         const matchesTags = tagFilter.length === 0 || tagFilter.some( tag => ticket.tags.includes( tag ) );
         const matchesAssignee = assignee === 'all' || ( assignee === 'unassigned' ? ticket.assigneeId === null : ticket.assigneeId === assignee );
