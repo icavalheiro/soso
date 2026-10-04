@@ -5,7 +5,7 @@ import { api, ticketBody } from './api';
 import type { BoardData, Ticket } from './api';
 import { reportError } from './feedback';
 
-export function ArchiveModal ( { data, onClose, onOpen, onChange }: { data: BoardData; onClose: () => void; onOpen: ( ticket: Ticket ) => void; onChange: ( ticket: Ticket ) => void } )
+export function ArchiveModal ( { data, onClose, onOpen, onChange }: { data: BoardData; onClose: () => void; onOpen: ( ticket: Ticket ) => void; onChange: ( ticket: Ticket ) => void; } )
 {
     const [ mode, setMode ] = useState( 'done' );
     const [ search, setSearch ] = useState( '' );

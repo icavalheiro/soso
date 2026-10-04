@@ -5,7 +5,7 @@ import { api, newId } from './api';
 import type { Board, Column, Person } from './api';
 import { reportError } from './feedback';
 
-export function BoardModal ( { board, onClose, onSave, onDelete }: { board?: Board; onClose: () => void; onSave: ( board: Board ) => void; onDelete: ( id: string ) => void } )
+export function BoardModal ( { board, onClose, onSave, onDelete }: { board?: Board; onClose: () => void; onSave: ( board: Board ) => void; onDelete: ( id: string ) => void; } )
 {
     const [ name, setName ] = useState( board?.name ?? '' );
     const [ description, setDescription ] = useState( board?.description ?? '' );

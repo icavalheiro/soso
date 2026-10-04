@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import type { Account, BoardData } from '../src/api';
 
-export function fixture (): { account: Account; data: BoardData }
+export function fixture (): { account: Account; data: BoardData; }
 {
     const account: Account = { id: 'admin-fixture', name: 'Maya Chen', email: 'maya@example.test', isAdmin: true, disabled: false, avatarId: null, theme: 'light', settings: '' };
     const data: BoardData = {

@@ -1,4 +1,4 @@
 <Solution>
-  <Project Path="src/Soso.Api/Soso.Api.csproj" />
-  <Project Path="tests/Soso.Api.Tests/Soso.Api.Tests.csproj" />
+    <Project Path="src/Soso.Api/Soso.Api.csproj" />
+    <Project Path="tests/Soso.Api.Tests/Soso.Api.Tests.csproj" />
 </Solution>

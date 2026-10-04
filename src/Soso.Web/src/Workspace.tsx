@@ -11,7 +11,7 @@ const ProfileModal = lazy( () => import( './SettingsModals' ).then( module => ( 
 const AdminModal = lazy( () => import( './SettingsModals' ).then( module => ( { default: module.AdminModal } ) ) );
 const ArchiveModal = lazy( () => import( './ArchiveModal' ).then( module => ( { default: module.ArchiveModal } ) ) );
 
-function IconButton ( { label, children, onClick }: { label: string; children: React.ReactNode; onClick: () => void } )
+function IconButton ( { label, children, onClick }: { label: string; children: React.ReactNode; onClick: () => void; } )
 {
     return <Tooltip label={ label }><ActionIcon aria-label={ label } variant="subtle" color="gray" size="lg" onClick={ onClick }>{ children }</ActionIcon></Tooltip>;
 }
@@ -227,18 +227,18 @@ export default function Workspace ()
                 <section className="board-toolbar"><TextInput aria-label="Search tickets" placeholder="Search cards..." leftSection={ <Search size={ 15 } /> } size="xs" value={ search } onChange={ event => { setSearch( event.currentTarget.value ); } } /><div className="tag-filters">{ tags.map( tag => <button key={ tag.value } className={ `tag-filter ${ tagFilter.includes( tag.value ) ? 'selected' : '' }` } aria-pressed={ tagFilter.includes( tag.value ) } onClick={ () => { setTagFilter( previous => previous.includes( tag.value ) ? previous.filter( value => value !== tag.value ) : [ ...previous, tag.value ] ); } }><i style={ { background: tag.color } } />{ tag.label }</button> ) }</div><Select size="xs" aria-label="Filter by assignee" value={ assignee } onChange={ value => { setAssignee( value ?? 'all' ); } } data={ [ { label: 'All assignees', value: 'all' }, { label: 'Unassigned', value: 'unassigned' }, ...data.members.map( member => ( { value: member.id, label: member.name } ) ) ] } className="assignee-filter" allowDeselect={ false } /><Select size="xs" aria-label="Filter by priority" value={ priority } onChange={ value => { setPriority( value ?? 'all' ); } } data={ [ { label: 'All priorities', value: 'all' }, ...[ 'urgent', 'high', 'normal', 'low' ].map( value => ( { value, label: value[ 0 ].toUpperCase() + value.slice( 1 ) } ) ) ] } className="priority-filter" allowDeselect={ false } /><Button size="xs" variant="default" leftSection={ <Archive size={ 14 } /> } onClick={ () => { setArchive( true ); } }>Archive</Button><Badge variant="light" color="gray" size="sm">{ filtered.length }</Badge>{ boardLoading && <Loader size={ 15 } /> }</section>
                 <Suspense fallback={ <Loader m="xl" /> }><Kanban data={ data } tickets={ filtered } onOpen={ setSelected } onCreate={ setNewColumn } onMove={ move } /></Suspense></> : <div className="empty-workspace">{ boardLoading || activeId ? <Loader /> : <><Columns3 size={ 42 } strokeWidth={ 1.2 } /><h1>Your workspace, ready.</h1><Button leftSection={ <Plus size={ 17 } /> } onClick={ () => { setBoardModal( 'create' ); } }>Create a board</Button></> }</div> }
         </main>
-            <Suspense fallback={ <Loader className="modal-loading" /> }>
-        { selected && data && <TicketModal key={ selected.id } ticket={ selected } data={ data } account={ account } onClose={ () => { setSelected( null ); } } onChange={ changed } onDelete={ id => { setData( previous => previous ? { ...previous, tickets: previous.tickets.filter( ticket => ticket.id !== id ) } : previous ); setSelected( null ); } } /> }
-        { boardModal && <BoardModal board={ boardModal === 'edit' ? data?.board : undefined } onClose={ () => { setBoardModal( null ); } } onSave={ board => { setBoards( previous => [ ...previous.filter( item => item.id !== board.id ), board ] ); selectBoard( board.id ); setBoardModal( null ); void api<BoardData>( `/boards/${ board.id }` ).then( setData ).catch( reportError ); } } onDelete={ id => { const remaining = boards.filter( board => board.id !== id ); setBoards( remaining ); selectBoard( remaining[ 0 ]?.id ?? '' ); setData( null ); setBoardModal( null ); } } /> }
-        { profile && <ProfileModal account={ account } onChange={ setAccount } onClose={ () => { setProfile( false ); } } /> }
-        { admin && <AdminModal onClose={ () => { setAdmin( false ); } } /> }
-        { archive && data && <ArchiveModal data={ data } onClose={ () => { setArchive( false ); } } onOpen={ setSelected } onChange={ changed } /> }
+        <Suspense fallback={ <Loader className="modal-loading" /> }>
+            { selected && data && <TicketModal key={ selected.id } ticket={ selected } data={ data } account={ account } onClose={ () => { setSelected( null ); } } onChange={ changed } onDelete={ id => { setData( previous => previous ? { ...previous, tickets: previous.tickets.filter( ticket => ticket.id !== id ) } : previous ); setSelected( null ); } } /> }
+            { boardModal && <BoardModal board={ boardModal === 'edit' ? data?.board : undefined } onClose={ () => { setBoardModal( null ); } } onSave={ board => { setBoards( previous => [ ...previous.filter( item => item.id !== board.id ), board ] ); selectBoard( board.id ); setBoardModal( null ); void api<BoardData>( `/boards/${ board.id }` ).then( setData ).catch( reportError ); } } onDelete={ id => { const remaining = boards.filter( board => board.id !== id ); setBoards( remaining ); selectBoard( remaining[ 0 ]?.id ?? '' ); setData( null ); setBoardModal( null ); } } /> }
+            { profile && <ProfileModal account={ account } onChange={ setAccount } onClose={ () => { setProfile( false ); } } /> }
+            { admin && <AdminModal onClose={ () => { setAdmin( false ); } } /> }
+            { archive && data && <ArchiveModal data={ data } onClose={ () => { setArchive( false ); } } onOpen={ setSelected } onChange={ changed } /> }
         </Suspense>
         <Modal opened={ newColumn !== null } onClose={ () => { setNewColumn( null ); } } title="New ticket" centered><form onSubmit={ event => { event.preventDefault(); void createTicket(); } }><Stack><TextInput label="Title" placeholder="What needs to happen?" required maxLength={ 160 } value={ title } autoFocus onChange={ event => { setTitle( event.currentTarget.value ); } } /><Select label="Column" value={ newColumn } onChange={ setNewColumn } data={ data?.board.columns.map( column => ( { value: column.id, label: column.name } ) ) ?? [] } allowDeselect={ false } /><Button type="submit" loading={ busy } disabled={ !title.trim() }>Create ticket</Button></Stack></form></Modal>
     </div>;
 }
 
-function Login ( { onLogin }: { onLogin: ( account: Account ) => void } )
+function Login ( { onLogin }: { onLogin: ( account: Account ) => void; } )
 {
     const [ email, setEmail ] = useState( '' );
     const [ password, setPassword ] = useState( '' );

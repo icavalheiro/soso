@@ -8,7 +8,7 @@ import { Plus, Check, CheckSquare, MessageSquare, CalendarDays, GripVertical } f
 import { imageUrl, tags } from './api';
 import type { BoardData, Column, Ticket } from './api';
 
-export function Kanban ( { data, tickets, onOpen, onCreate, onMove }: { data: BoardData; tickets: Ticket[]; onOpen: ( ticket: Ticket ) => void; onCreate: ( column: string ) => void; onMove: ( ticket: Ticket, columnId: string, position: number ) => Promise<void> } )
+export function Kanban ( { data, tickets, onOpen, onCreate, onMove }: { data: BoardData; tickets: Ticket[]; onOpen: ( ticket: Ticket ) => void; onCreate: ( column: string ) => void; onMove: ( ticket: Ticket, columnId: string, position: number ) => Promise<void>; } )
 {
     const [ dragged, setDragged ] = useState<Ticket | null>( null );
     const sensors = useSensors( useSensor( PointerSensor, { activationConstraint: { distance: 6 } } ), useSensor( KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates } ) );
@@ -43,7 +43,7 @@ export function Kanban ( { data, tickets, onOpen, onCreate, onMove }: { data: Bo
     </DndContext>;
 }
 
-function BoardColumn ( { column, index, tickets, data, onOpen, onCreate }: { column: Column; index: number; tickets: Ticket[]; data: BoardData; onOpen: ( ticket: Ticket ) => void; onCreate: ( column: string ) => void } )
+function BoardColumn ( { column, index, tickets, data, onOpen, onCreate }: { column: Column; index: number; tickets: Ticket[]; data: BoardData; onOpen: ( ticket: Ticket ) => void; onCreate: ( column: string ) => void; } )
 {
     const { setNodeRef, isOver } = useDroppable( { id: column.id } );
     return <section ref={ setNodeRef } className={ `kanban-column ${ isOver ? 'drop-target' : '' }` }>
@@ -52,7 +52,7 @@ function BoardColumn ( { column, index, tickets, data, onOpen, onCreate }: { col
     </section>;
 }
 
-function SortableTicket ( { ticket, data, onOpen }: { ticket: Ticket; data: BoardData; onOpen: ( ticket: Ticket ) => void } )
+function SortableTicket ( { ticket, data, onOpen }: { ticket: Ticket; data: BoardData; onOpen: ( ticket: Ticket ) => void; } )
 {
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable( { id: ticket.id } );
     return <article ref={ setNodeRef } style={ { transform: CSS.Transform.toString( transform ), transition, opacity: isDragging ? 0.25 : 1 } } className={ `ticket priority-${ ticket.priority }` }>
@@ -61,7 +61,7 @@ function SortableTicket ( { ticket, data, onOpen }: { ticket: Ticket; data: Boar
     </article>;
 }
 
-function TicketContent ( { ticket, data }: { ticket: Ticket; data: BoardData } )
+function TicketContent ( { ticket, data }: { ticket: Ticket; data: BoardData; } )
 {
     const [ now ] = useState( Date.now );
     const done = ticket.subtasks.filter( task => task.done ).length;

@@ -5,7 +5,7 @@ import { api, imageUrl, newId, ticketBody, tags } from './api';
 import type { Account, BoardData, Ticket } from './api';
 import { reportError } from './feedback';
 
-export function TicketModal ( { ticket, data, account, onClose, onChange, onDelete }: { ticket: Ticket; data: BoardData; account: Account; onClose: () => void; onChange: ( ticket: Ticket ) => void; onDelete: ( id: string ) => void } )
+export function TicketModal ( { ticket, data, account, onClose, onChange, onDelete }: { ticket: Ticket; data: BoardData; account: Account; onClose: () => void; onChange: ( ticket: Ticket ) => void; onDelete: ( id: string ) => void; } )
 {
     const [ draft, setDraft ] = useState<Ticket>( structuredClone( ticket ) );
     const [ baseline, setBaseline ] = useState( JSON.stringify( ticketBody( ticket ) ) );

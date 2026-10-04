@@ -9,15 +9,15 @@ import './styles.css';
 import App from './Workspace.tsx';
 
 const theme = createTheme( {
-    fontFamily: 'DM Sans Variable, sans-serif', primaryColor: 'teal', defaultRadius: 6,
-    headings: { fontFamily: 'DM Sans Variable, sans-serif' },
+  fontFamily: 'DM Sans Variable, sans-serif', primaryColor: 'teal', defaultRadius: 6,
+  headings: { fontFamily: 'DM Sans Variable, sans-serif' },
 } );
 
 createRoot( document.getElementById( 'root' )! ).render(
-    <StrictMode>
-        <MantineProvider theme={ theme } defaultColorScheme="light">
-            <Notifications position="bottom-right" />
-            <App />
-        </MantineProvider>
-    </StrictMode>,
+  <StrictMode>
+    <MantineProvider theme={ theme } defaultColorScheme="light">
+      <Notifications position="bottom-right" />
+      <App />
+    </MantineProvider>
+  </StrictMode>,
 );

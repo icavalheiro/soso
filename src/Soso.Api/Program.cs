@@ -1,14 +1,4 @@
 using System.Security.Claims;
-using System.Threading.RateLimiting;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.DataProtection;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.RateLimiting;
-using Soso.Api;
-using Microsoft.AspNetCore.Antiforgery;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.HttpOverrides;
 using System.Net;
 
 if (args.Contains("--healthcheck"))
@@ -39,15 +29,7 @@ builder.Services.AddSingleton<BoardService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMcpServer(options => options.ServerInfo = new() { Name = "Soso", Version = "1.0.0" })
     .WithHttpTransport(options => options.Stateless = true).WithTools<McpTools>();
-builder.Services.Configure<ForwardedHeadersOptions>(options =>
-{
-    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    var proxy = builder.Configuration["TrustedProxy"];
-    if (proxy is not null)
-    {
-        options.KnownProxies.Add(IPAddress.Parse(proxy));
-    }
-});
+builder.Services.Configure<ForwardedHeadersOptions>(options => TunnelProxy.Configure(options, builder.Configuration));
 builder.Services.AddSingleton<IPasswordHasher<Account>, PasswordHasher<Account>>();
 builder.Services.AddProblemDetails();
 builder.Services.AddValidation();
