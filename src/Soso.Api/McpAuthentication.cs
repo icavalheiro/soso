@@ -7,6 +7,8 @@ namespace Soso.Api;
 public sealed class McpAuthentication(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder, Store store)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
+    public const string TokenClaim = "mcp_token";
+
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         var header = Request.Headers.Authorization.ToString();
@@ -22,6 +24,8 @@ public sealed class McpAuthentication(IOptionsMonitor<AuthenticationSchemeOption
         {
             return Task.FromResult(AuthenticateResult.Fail("Invalid or expired token."));
         }
-        return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(AuthEndpoints.Principal(account!), Scheme.Name)));
+        var principal = AuthEndpoints.Principal(account!);
+        ((System.Security.Claims.ClaimsIdentity)principal.Identity!).AddClaim(new(TokenClaim, token!.Id));
+        return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(principal, Scheme.Name)));
     }
 }

@@ -3,6 +3,49 @@ import { installApiMock } from './fixtures';
 
 for ( const width of [ 1366, 390 ] )
 {
+    test( `MCP token board assignments at ${ width }px`, async ( { page }, testInfo ) =>
+    {
+        await page.setViewportSize( { width, height: 900 } );
+        const state = await installApiMock( page );
+        await page.goto( '/' );
+        if ( width < 768 )
+        {
+            await page.getByRole( 'button', { name: 'Expand sidebar', exact: true } ).click();
+        }
+        await page.getByRole( 'button', { name: 'Profile & settings', exact: true } ).click();
+        await page.getByRole( 'tab', { name: 'MCP', exact: true } ).click();
+        await page.getByLabel( 'Token name' ).fill( 'Integration' );
+        await page.getByRole( 'button', { name: 'Create token', exact: true } ).click();
+        await expect( page.getByLabel( 'New token' ) ).toHaveValue( 'test-only-mcp-secret' );
+        await expect( page.getByText( 'No board access', { exact: true } ) ).toBeVisible();
+        const save = page.getByRole( 'button', { name: 'Save boards for Integration', exact: true } );
+        await expect( save ).toBeDisabled();
+        await page.getByRole( 'combobox', { name: 'Assigned boards for Integration', exact: true } ).click();
+        await page.getByRole( 'option', { name: state.data.board.name, exact: true } ).click();
+        await page.getByRole( 'combobox', { name: 'Assigned boards for Integration', exact: true } ).press( 'Escape' );
+        const assignment = page.waitForRequest( request => request.method() === 'PUT' && request.url().endsWith( '/boards' ) );
+        await save.click();
+        expect( ( await assignment ).postDataJSON() ).toEqual( { boardIds: [ state.data.board.id ] } );
+        await expect( page.getByText( '1 assigned', { exact: true } ) ).toBeVisible();
+        await expect( save ).toBeDisabled();
+        await page.reload();
+        await page.getByRole( 'button', { name: 'Profile & settings', exact: true } ).click();
+        await page.getByRole( 'tab', { name: 'MCP', exact: true } ).click();
+        await expect( page.getByText( '1 assigned', { exact: true } ) ).toBeVisible();
+        await page.screenshot( { path: testInfo.outputPath( 'mcp-board-assignments.png' ) } );
+        expect( await page.locator( '.token-row' ).evaluate( element => element.scrollWidth <= element.clientWidth ) ).toBeTruthy();
+        await page.getByRole( 'button', { name: 'Clear boards for Integration', exact: true } ).click();
+        const removal = page.waitForRequest( request => request.method() === 'PUT' && request.url().endsWith( '/boards' ) );
+        await save.click();
+        expect( ( await removal ).postDataJSON() ).toEqual( { boardIds: [] } );
+        await expect( page.getByText( 'No board access', { exact: true } ) ).toBeVisible();
+        await page.getByRole( 'button', { name: 'Revoke Integration', exact: true } ).click();
+        await expect( page.locator( '.token-row' ) ).toHaveCount( 0 );
+    } );
+}
+
+for ( const width of [ 1366, 390 ] )
+{
     test( `profile photo crop and cancellation at ${ width }px`, async ( { page }, testInfo ) =>
     {
         await page.setViewportSize( { width, height: 900 } );

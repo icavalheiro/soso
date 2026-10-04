@@ -35,6 +35,8 @@ public sealed record SubtaskRequest([Required, MaxLength(32)] string Id, [Requir
 public sealed record CommentRequest([Required, MaxLength(4000)] string Text);
 /// <summary>Token label.</summary>
 public sealed record TokenRequest([Required, MaxLength(80)] string Name);
+/// <summary>Explicit board assignments for a personal MCP token.</summary>
+public sealed record UpdateTokenBoardsRequest([Required, MaxLength(1000)] string[] BoardIds);
 /// <summary>Board and its visible tickets.</summary>
 public sealed record BoardResponse(Board Board, Ticket[] Tickets, PersonResponse[] Members);
 /// <summary>Minimal member information without private preferences or email.</summary>

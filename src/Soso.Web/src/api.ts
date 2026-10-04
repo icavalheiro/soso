@@ -6,7 +6,7 @@ export type Subtask = { id: string; title: string; done: boolean; };
 export type Comment = { id: string; authorId: string; text: string; createdAt: string; };
 export type Ticket = { id: string; boardId: string; columnId: string; title: string; description: string; priority: string; tags: string[]; archived: boolean; assigneeId: string | null; dueDate: string | null; position: number; revision: number; subtasks: Subtask[]; comments: Comment[]; images: string[]; };
 export type BoardData = { board: Board; tickets: Ticket[]; members: Person[]; };
-export type Token = { id: string; name: string; expiresAt: string; };
+export type Token = { id: string; name: string; expiresAt: string; boardIds: string[]; };
 let csrfToken = '';
 
 export async function refreshCsrf ()

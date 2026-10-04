@@ -125,7 +125,7 @@ public static class AuthEndpoints
         group.MapGet("/tokens", (ClaimsPrincipal user, Store store) =>
         {
             var id = BoardService.UserId(user);
-            return TypedResults.Ok(store.Tokens.Find(token => token.UserId == id).Select(token => new { token.Id, token.Name, token.ExpiresAt }));
+            return TypedResults.Ok(store.Tokens.Find(token => token.UserId == id).Select(token => new { token.Id, token.Name, token.ExpiresAt, token.BoardIds }));
         });
         group.MapPost("/tokens", (TokenRequest request, ClaimsPrincipal user, Store store) =>
         {
@@ -140,6 +140,26 @@ public static class AuthEndpoints
                 var token = new AccessToken { Id = HashToken(secret), UserId = id, Name = request.Name.Trim(), ExpiresAt = DateTime.UtcNow.AddDays(30) };
                 store.Tokens.Insert(token);
                 return TypedResults.Ok(new { token = secret, token.ExpiresAt });
+            }
+        });
+        group.MapPut("/tokens/{id}/boards", (string id, UpdateTokenBoardsRequest request, ClaimsPrincipal user, Store store, BoardService service) =>
+        {
+            lock (store.Gate)
+            {
+                var token = store.Tokens.FindById(id);
+                var ownsToken = token?.UserId == BoardService.UserId(user);
+                if (!ownsToken)
+                {
+                    throw new ApiException(404, "Token not found.");
+                }
+                var boardIds = request.BoardIds.Distinct().ToList();
+                foreach (var boardId in boardIds)
+                {
+                    service.RequireBoard(boardId, user);
+                }
+                token!.BoardIds = boardIds;
+                store.Tokens.Update(token);
+                return TypedResults.Ok(new { token.Id, token.Name, token.ExpiresAt, token.BoardIds });
             }
         });
         group.MapDelete("/tokens/{id}", (string id, ClaimsPrincipal user, Store store) =>

@@ -9,6 +9,8 @@ columns, tickets, subtasks, comments, tags, assignees, due dates and attachments
    registration; an administrator must create accounts.
 2. Open Profile & settings / MCP and create a personal token. Copy it when shown:
    tokens are displayed only once and stored only as SHA-256 hashes.
+  Each token starts with access to no boards. Select Assigned boards for the
+  token and click Save boards before using board tools.
 3. Use a client supporting MCP Streamable HTTP with custom Authorization headers.
    The endpoint is /mcp on the same origin as the application:
    - Production: https://YOUR-SOSO-HOST/mcp
@@ -62,6 +64,10 @@ development, not public deployments.
 
 - Boards contain columns and have an owner and a member list. Owners and members
   can access their boards; administrators can access all boards.
+- MCP tokens only access boards explicitly assigned in Profile & settings / MCP,
+  intersected with the account's current board permissions. This also applies to
+  administrators. New and existing unassigned tokens have no board access.
+  Clearing Assigned boards and saving removes access on subsequent operations.
 - Board configuration and membership are managed by the owner or an administrator
   through the web UI. The exposed MCP tools do not create or configure boards,
   create accounts, change passwords, manage tokens or upload attachments.
@@ -83,8 +89,9 @@ Use MCP tools/list to inspect the live schemas. The web server exposes exactly
 these tools; desktop tools such as read_board and mutate_board do not apply here.
 
 list_boards()
-  Returns the boards accessible to the authenticated user, including their IDs
-  and column definitions. No arguments.
+  Returns only boards assigned to this token that the authenticated user can
+  access, including their IDs and column definitions. No arguments. An unassigned
+  token returns an empty list; assign boards in the web settings, not via MCP.
 
 get_board(boardId: string)
   Returns board, tickets and members. Read it before editing to obtain current

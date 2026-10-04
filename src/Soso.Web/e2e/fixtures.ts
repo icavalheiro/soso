@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import type { Account, BoardData } from '../src/api';
+import type { Account, BoardData, Token } from '../src/api';
 
 export function fixture (): { account: Account; data: BoardData; }
 {
@@ -25,6 +25,7 @@ export async function installApiMock ( page: Page, authenticated = true )
     let loggedIn = authenticated;
     let sequence = 10;
     const accounts = [ state.account ];
+    const tokens: Token[] = [];
     await page.route( '**/api/**', async route =>
     {
         const request = route.request();
@@ -71,7 +72,31 @@ export async function installApiMock ( page: Page, authenticated = true )
         }
         if ( path === '/api/auth/tokens' )
         {
-            return reply( [] );
+            if ( method === 'POST' )
+            {
+                const token = { id: `token-${ sequence++ }`, name: request.postDataJSON().name, expiresAt: '2026-11-03T00:00:00Z', boardIds: [] };
+                tokens.push( token );
+                return reply( { token: 'test-only-mcp-secret', expiresAt: token.expiresAt } );
+            }
+            return reply( tokens );
+        }
+        if ( path.startsWith( '/api/auth/tokens/' ) )
+        {
+            const token = tokens.find( item => path.split( '/' )[ 4 ] === item.id );
+            if ( !token )
+            {
+                return reply( { detail: 'Token not found.' }, 404 );
+            }
+            if ( method === 'PUT' && path.endsWith( '/boards' ) )
+            {
+                token.boardIds = request.postDataJSON().boardIds;
+                return reply( token );
+            }
+            if ( method === 'DELETE' )
+            {
+                tokens.splice( tokens.indexOf( token ), 1 );
+                return route.fulfill( { status: 204 } );
+            }
         }
         if ( path === '/api/people' )
         {

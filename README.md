@@ -82,7 +82,7 @@ Bootstrap settings are only used when no active administrator exists. Rotate the
 
 The web application serves an LLM integration guide at `/llms.txt`, covering client configuration, permissions, tool arguments, revision handling and safe agent workflows. Its source is [src/Soso.Web/public/llms.txt](src/Soso.Web/public/llms.txt); Vite includes it in the frontend build and the application serves it as a public static asset.
 
-Create a token in Profile & settings / MCP. Tokens are shown once, stored only as SHA-256 hashes, expire in 30 days and can be revoked immediately. Configure a client that supports **Streamable HTTP with custom bearer headers**:
+Create a token in Profile & settings / MCP. Each token starts with access to no boards. Select its Assigned boards and click Save boards to grant access; clear and save the selection to remove access. Existing tokens without assignments also have no board access. MCP access is the intersection of these assignments and the token owner's current board permissions, including for administrators. Changes take effect on subsequent MCP operations. Tokens are shown once, stored only as SHA-256 hashes, expire in 30 days and can be revoked immediately. Configure a client that supports **Streamable HTTP with custom bearer headers**:
 
 ```json
 {

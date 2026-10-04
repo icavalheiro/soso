@@ -77,7 +77,7 @@ public sealed class SecurityTests
 
     private static UpdateTicketRequest Edit(Ticket ticket, string[]? tags = null, bool archived = false) => new(ticket.Title, ticket.Description, ticket.ColumnId, ticket.Priority, ticket.AssigneeId, null, ticket.Position, [], tags ?? [], archived, ticket.Revision);
 
-    private static void WithMcp(Action<BoardService, McpTools, ClaimsPrincipal, HttpContextAccessor> test)
+    private static void WithMcp(Action<BoardService, McpTools, ClaimsPrincipal, HttpContextAccessor, Store> test)
     {
         var path = Path.Combine(Path.GetTempPath(), "soso-mcp-tests-" + Guid.NewGuid().ToString("N"));
         try
@@ -87,7 +87,7 @@ public sealed class SecurityTests
             var service = new BoardService(store);
             var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "owner")], "test"));
             var accessor = new HttpContextAccessor { HttpContext = new DefaultHttpContext { User = user } };
-            test(service, new McpTools(service, accessor), user, accessor);
+            test(service, new McpTools(service, accessor), user, accessor, store);
         }
         finally
         {
@@ -101,7 +101,7 @@ public sealed class SecurityTests
     [Fact]
     public void McpBatchesAreAtomicAndRespectRevisionsAndAccess()
     {
-        WithMcp((service, tools, user, accessor) =>
+        WithMcp((service, tools, user, accessor, store) =>
         {
             var board = service.Create(new("Batch", ""), user);
             var column = board.Columns[0].Id;
@@ -132,7 +132,7 @@ public sealed class SecurityTests
     [Fact]
     public void McpTextSearchScopesAccessAndSupportsPaginationAndArchive()
     {
-        WithMcp((service, tools, user, accessor) =>
+        WithMcp((service, tools, user, accessor, store) =>
         {
             var board = service.Create(new("Visible", ""), user);
             var tickets = tools.CreateTickets(board.Id, Enumerable.Range(0, 6).Select(index => new CreateTicketRequest(index == 0 ? "Needle title" : "Ticket " + index, board.Columns[0].Id)).ToArray());
@@ -159,6 +159,50 @@ public sealed class SecurityTests
             Assert.Equal(400, Assert.Throws<ApiException>(() => tools.SearchTickets(" ")).Status);
             Assert.Equal(400, Assert.Throws<ApiException>(() => tools.SearchTickets("needle", offset: -1)).Status);
             Assert.Equal(400, Assert.Throws<ApiException>(() => tools.SearchTickets("needle", limit: 101)).Status);
+        });
+    }
+
+    [Fact]
+    public void McpTokenBoardAssignmentsRestrictReadsSearchAndWrites()
+    {
+        WithMcp((service, tools, user, accessor, store) =>
+        {
+            var board = service.Create(new("Assigned", ""), user);
+            var hidden = service.Create(new("Unassigned", ""), user);
+            service.CreateTicket(board.Id, new("Needle assigned", board.Columns[0].Id), user);
+            service.CreateTicket(hidden.Id, new("Needle hidden", hidden.Columns[0].Id), user);
+            var token = new AccessToken { Id = "token", UserId = "owner", ExpiresAt = DateTime.UtcNow.AddDays(1) };
+            store.Tokens.Insert(token);
+            var identity = new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "owner"), new Claim(ClaimTypes.Role, "admin"), new Claim(McpAuthentication.TokenClaim, token.Id)], "Mcp");
+            accessor.HttpContext!.User = new ClaimsPrincipal(identity);
+            Assert.Empty(tools.ListBoards());
+            Assert.Empty(tools.SearchTickets("needle").Tickets);
+            Assert.Equal(404, Assert.Throws<ApiException>(() => tools.GetBoard(board.Id)).Status);
+            Assert.Equal(404, Assert.Throws<ApiException>(() => tools.CreateTickets(board.Id, [new("Denied", board.Columns[0].Id)])).Status);
+            token.BoardIds = [board.Id];
+            store.Tokens.Update(token);
+            Assert.Equal(board.Id, Assert.Single(tools.ListBoards()).Id);
+            Assert.Equal(board.Id, tools.GetBoard(board.Id).Board.Id);
+            Assert.Single(tools.SearchTickets("needle").Tickets);
+            Assert.Equal(404, Assert.Throws<ApiException>(() => tools.GetBoard(hidden.Id)).Status);
+            Assert.Equal(404, Assert.Throws<ApiException>(() => tools.SearchTickets("needle", hidden.Id)).Status);
+            var created = tools.CreateTickets(board.Id, [new("Allowed", board.Columns[0].Id)]);
+            tools.UpdateTickets(board.Id, [new(created[0].Id, Edit(created[0]) with { Title = "Updated" })]);
+            token.BoardIds = [];
+            store.Tokens.Update(token);
+            Assert.Empty(tools.ListBoards());
+            Assert.Equal(404, Assert.Throws<ApiException>(() => tools.UpdateTickets(board.Id, [new(created[0].Id, Edit(created[0]))])).Status);
+            Assert.Equal(2, service.List(user).Length);
+            token.BoardIds = [board.Id];
+            token.ExpiresAt = DateTime.UtcNow.AddMinutes(-1);
+            store.Tokens.Update(token);
+            Assert.Empty(tools.ListBoards());
+            token.ExpiresAt = DateTime.UtcNow.AddDays(1);
+            token.UserId = "other";
+            store.Tokens.Update(token);
+            Assert.Empty(tools.ListBoards());
+            store.Tokens.Delete(token.Id);
+            Assert.Equal(404, Assert.Throws<ApiException>(() => tools.GetBoard(board.Id)).Status);
         });
     }
 
@@ -362,8 +406,21 @@ public sealed class SecurityTests
         Assert.Contains("update_tickets", body);
         Assert.Contains("search_tickets", body);
         Assert.DoesNotContain("CreateAccount", body);
-        await CreateBoard(admin, "Administrator private board");
+        var privateBoard = await CreateBoard(admin, "Administrator private board");
         var board = await CreateBoard(user, "Member private board");
+        var tokenId = AuthEndpoints.HashToken(token);
+        using var initialTokens = await user.GetAsync("/api/auth/tokens");
+        Assert.Empty((await initialTokens.Content.ReadFromJsonAsync<JsonElement>())[0].GetProperty("boardIds").EnumerateArray());
+        using var emptyCall = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 10, method = "tools/call", @params = new { name = "list_boards", arguments = new { } } });
+        Assert.DoesNotContain("Member private board", await emptyCall.Content.ReadAsStringAsync());
+        using var deniedRead = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 11, method = "tools/call", @params = new { name = "get_board", arguments = new { boardId = board.Id } } });
+        Assert.Contains("\"isError\":true", await deniedRead.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.NotFound, (await admin.PutAsJsonAsync($"/api/auth/tokens/{tokenId}/boards", new { boardIds = new[] { board.Id } })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await user.PutAsJsonAsync($"/api/auth/tokens/{tokenId}/boards", new { boardIds = new[] { privateBoard.Id } })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await user.PutAsJsonAsync($"/api/auth/tokens/{tokenId}/boards", new { boardIds = new[] { "missing" } })).StatusCode);
+        using var assigned = await user.PutAsJsonAsync($"/api/auth/tokens/{tokenId}/boards", new { boardIds = new[] { board.Id, board.Id } });
+        Assert.Equal(HttpStatusCode.OK, assigned.StatusCode);
+        Assert.Single((await assigned.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("boardIds").EnumerateArray());
         var call = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 3, method = "tools/call", @params = new { name = "list_boards", arguments = new { } } });
         Assert.Equal(HttpStatusCode.OK, call.StatusCode);
         var callBody = await call.Content.ReadAsStringAsync();
@@ -386,6 +443,12 @@ public sealed class SecurityTests
         Assert.DoesNotContain("\"isError\":true", searchBody);
         Assert.Contains("MCP batch first", searchBody);
         Assert.DoesNotContain("MCP batch second", searchBody);
+        using var unassigned = await user.PutAsJsonAsync($"/api/auth/tokens/{tokenId}/boards", new { boardIds = Array.Empty<string>() });
+        Assert.Equal(HttpStatusCode.OK, unassigned.StatusCode);
+        using var removedRead = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 12, method = "tools/call", @params = new { name = "get_board", arguments = new { boardId = board.Id } } });
+        Assert.Contains("\"isError\":true", await removedRead.Content.ReadAsStringAsync());
+        using var removedSearch = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 13, method = "tools/call", @params = new { name = "search_tickets", arguments = new { query = "NEEDLE" } } });
+        Assert.DoesNotContain("MCP batch first", await removedSearch.Content.ReadAsStringAsync());
         Assert.Equal(HttpStatusCode.Unauthorized, (await user.PostAsJsonAsync("/mcp", new { })).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await mcp.GetAsync("/api/boards")).StatusCode);
         await user.DeleteAsync("/api/auth/tokens/" + AuthEndpoints.HashToken(token));

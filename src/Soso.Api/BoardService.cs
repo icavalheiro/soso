@@ -15,11 +15,26 @@ public sealed class BoardService(Store store)
     public static readonly string[] AllowedColors = ["teal", "blue", "cyan", "green", "grape", "pink", "orange", "gray"];
     public static string UserId(ClaimsPrincipal user) => user.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new ApiException(401, "Sign in required.");
 
+    private bool TokenAllowsBoard(string boardId, ClaimsPrincipal user)
+    {
+        var tokenId = user.FindFirstValue(McpAuthentication.TokenClaim);
+        if (tokenId is null)
+        {
+            return true;
+        }
+        var token = store.Tokens.FindById(tokenId);
+        var ownsToken = token?.UserId == UserId(user);
+        var isActive = token?.ExpiresAt > DateTime.UtcNow;
+        var isAssigned = token?.BoardIds.Contains(boardId) == true;
+        return ownsToken && isActive && isAssigned;
+    }
+
     public Board RequireBoard(string id, ClaimsPrincipal user, bool ownerOnly = false)
     {
         var board = store.Boards.FindById(id);
         var userId = UserId(user);
-        var canRead = board is not null && (board.OwnerId == userId || board.Members.Contains(userId) || user.IsInRole("admin"));
+        var tokenAllows = TokenAllowsBoard(id, user);
+        var canRead = board is not null && tokenAllows && (board.OwnerId == userId || board.Members.Contains(userId) || user.IsInRole("admin"));
         if (!canRead)
         {
             throw new ApiException(404, "Board not found.");
@@ -35,7 +50,7 @@ public sealed class BoardService(Store store)
     public Board[] List(ClaimsPrincipal user)
     {
         var id = UserId(user);
-        return store.Boards.FindAll().Where(board => board.OwnerId == id || board.Members.Contains(id) || user.IsInRole("admin")).ToArray();
+        return store.Boards.FindAll().Where(board => TokenAllowsBoard(board.Id, user) && (board.OwnerId == id || board.Members.Contains(id) || user.IsInRole("admin"))).ToArray();
     }
 
     public BoardResponse Get(string id, ClaimsPrincipal user)
