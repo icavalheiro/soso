@@ -169,6 +169,8 @@ for ( const width of [ 1366, 390 ] )
         await installApiMock( page );
         await page.goto( '/' );
         await expect( page.locator( '.board-ticket-count' ) ).toHaveText( '4 tickets' );
+        await expect( page.locator( '.topbar-title > .topbar-board-name + .board-ticket-count' ) ).toBeVisible();
+        await expect( page.locator( '.board-heading .board-ticket-count' ) ).toHaveCount( 0 );
         await expect( page.locator( '.ticket' ) ).toHaveCount( 4 );
         await expect( page.locator( '.eyebrow, .board-toolbar' ) ).toHaveCount( 0 );
         await expect( page.locator( '.topbar' ).getByRole( 'textbox', { name: 'Search tickets' } ) ).toBeVisible();

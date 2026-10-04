@@ -242,7 +242,7 @@ export default function Workspace ()
         </aside>
         <main className="workspace">
             <header className="topbar">
-                <Group gap={ 6 } wrap="nowrap" className="topbar-title"><IconButton label={ collapsed ? 'Expand sidebar' : 'Collapse sidebar' } onClick={ toggleSidebar } expanded={ !collapsed } controls="workspace-sidebar">{ collapsed ? <PanelLeftOpen size={ 16 } /> : <PanelLeftClose size={ 16 } /> }</IconButton><span className="workspace-label">Sosô</span><span className="separator">/</span>{ data && <BoardIcon icon={ data.board.icon } color={ data.board.color } size={ 14 } /> }<Text className="topbar-board-name" size="xs" fw={ 600 } truncate>{ data?.board.name ?? 'Boards' }</Text></Group>
+                <Group gap={ 6 } wrap="nowrap" className="topbar-title"><IconButton label={ collapsed ? 'Expand sidebar' : 'Collapse sidebar' } onClick={ toggleSidebar } expanded={ !collapsed } controls="workspace-sidebar">{ collapsed ? <PanelLeftOpen size={ 16 } /> : <PanelLeftClose size={ 16 } /> }</IconButton><span className="workspace-label">Sosô</span><span className="separator">/</span>{ data && <BoardIcon icon={ data.board.icon } color={ data.board.color } size={ 14 } /> }<Text className="topbar-board-name" size="xs" fw={ 600 } truncate>{ data?.board.name ?? 'Boards' }</Text>{ data && <Badge className="board-ticket-count" variant="light" color="gray" size="sm">{ filtered.length } { filtered.length === 1 ? 'ticket' : 'tickets' }</Badge> }</Group>
                 <Group gap={ 4 } wrap="nowrap" className="topbar-actions">
                     { data && <TextInput className="topbar-search" aria-label="Search tickets" placeholder="Search cards..." leftSection={ <Search size={ 14 } /> } size="xs" value={ search } onChange={ event => { setSearch( event.currentTarget.value ); } } /> }
                     <IconButton label="Refresh board" onClick={ () => { void reload(); } }>{ boardLoading ? <Loader size={ 14 } /> : <RefreshCw size={ 15 } /> }</IconButton>
@@ -251,7 +251,7 @@ export default function Workspace ()
                 </Group>
             </header>
             { data ? <><section className="board-heading">
-                <div className="board-title"><h1>{ data.board.name }</h1><Badge className="board-ticket-count" variant="light" color="gray" size="sm">{ filtered.length } { filtered.length === 1 ? 'ticket' : 'tickets' }</Badge>{ data.board.description && <p>{ data.board.description }</p> }</div>
+                <div className="board-title"><h1>{ data.board.name }</h1>{ data.board.description && <p>{ data.board.description }</p> }</div>
                 <Group className="board-actions" gap={ 6 }>
                     <Avatar.Group className="board-avatars">{ data.members.slice( 0, 4 ).map( member => <Tooltip key={ member.id } label={ member.name }><Avatar size={ 24 } radius="xl" src={ imageUrl( member.avatarId ) }>{ member.name.slice( 0, 1 ) }</Avatar></Tooltip> ) }</Avatar.Group>
                     { canManage && <IconButton label="Board settings" onClick={ () => { setBoardModal( 'edit' ); } }><Settings size={ 16 } /></IconButton> }
