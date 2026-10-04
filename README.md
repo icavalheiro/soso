@@ -1,4 +1,4 @@
-# Soso
+# Sosô
 
 A lightweight software-development kanban workspace built with ASP.NET Core 10 minimal APIs, LiteDB, React, TypeScript, Vite and Mantine.
 
@@ -17,7 +17,7 @@ A lightweight software-development kanban workspace built with ASP.NET Core 10 m
 
 Requires .NET 10 SDK and Node.js 24. A localhost development HTTPS certificate must be available and trusted by your browser. If needed, run `dotnet dev-certs https --trust` yourself.
 
-Set `Bootstrap__Email` and `Bootstrap__Password` (14-128 characters) in your terminal environment. Optional: `Bootstrap__Name`. Soso fails startup if no active administrator exists and valid bootstrap credentials are missing. Existing accounts are never overwritten by bootstrap settings.
+Set `Bootstrap__Email` and `Bootstrap__Password` (14-128 characters) in your terminal environment. Optional: `Bootstrap__Name`. Sosô fails startup if no active administrator exists and valid bootstrap credentials are missing. Existing accounts are never overwritten by bootstrap settings.
 
 ```cmd
 npm --prefix src/Soso.Web ci
@@ -126,15 +126,15 @@ Tests cover anonymous access, CSRF, administrator-only accounts, cross-board iso
 
 ## Web Application License
 
-The repository's original GNU GPLv3 license is preserved in `LICENSE`. LiteDB, Mantine, React and dnd-kit use MIT; the MCP C# SDK uses Apache-2.0; Lucide uses ISC. ImageSharp's Six Labors Split License grants Apache-2.0 for use in open-source software, the applicable criterion for Soso. Reassess those terms before adopting it in a closed-source commercial derivative. Dependency licenses and notices remain available in their published packages and source repositories. Do not assume the logo has independent redistribution rights beyond those supplied by its owner.
+The repository's original GNU GPLv3 license is preserved in `LICENSE`. LiteDB, Mantine, React and dnd-kit use MIT; the MCP C# SDK uses Apache-2.0; Lucide uses ISC. ImageSharp's Six Labors Split License grants Apache-2.0 for use in open-source software, the applicable criterion for Sosô. Reassess those terms before adopting it in a closed-source commercial derivative. Dependency licenses and notices remain available in their published packages and source repositories. Do not assume the logo has independent redistribution rights beyond those supplied by its owner.
 
 ## Separate Desktop Documentation
 
 The following Tauri/Rust notes describe a separate desktop variant. Its commands and SQLite data paths do not apply to the ASP.NET Core / LiteDB web application documented above.
 
-# soso
+# Sosô
 
-<img src="logo.jpg" alt="Logo do soso" width="240" />
+<img src="logo.jpg" alt="Logo do Sosô" width="240" />
 
 Kanban desktop local com Tauri 2, Rust, React, TypeScript e Mantine em tema escuro. Permite criar e selecionar multiplos boards, criar e editar tickets, arrastar e reordenar, mudar estados, comentar, adicionar e marcar subtarefas, buscar e alternar entre board e lista.
 
@@ -169,7 +169,7 @@ Compila o executavel desktop, sem instalador. Para gerar o instalador NSIS, use 
 
 O app inicia um servidor MCP Streamable HTTP em `http://127.0.0.1:17842/mcp`, dentro do processo desktop. Enquanto a janela estiver aberta, clientes compativeis, incluindo o VS Code, podem ler e alterar os boards. Ao sair do app, o servidor e encerrado.
 
-1. Abra o soso e selecione o board que deseja acompanhar.
+1. Abra o Sosô e selecione o board que deseja acompanhar.
 2. No cabecalho, abra **Conexao MCP** pelo icone de plugue. O painel mostra URL, token da sessao e configuracao VS Code.
 3. Copie a configuracao para `.vscode/mcp.json` na pasta de trabalho do VS Code. Esse arquivo local nao e versionado neste repositorio.
 4. Execute **MCP: List Servers**, inicie `soso` e informe o token no campo protegido quando solicitado. A confianca e as aprovacoes de ferramentas continuam sob controle do cliente.
@@ -189,7 +189,7 @@ O app inicia um servidor MCP Streamable HTTP em `http://127.0.0.1:17842/mcp`, de
     {
       "type": "promptString",
       "id": "soso-mcp-token",
-      "description": "Token MCP da sessao soso",
+      "description": "Token MCP da sessao Sosô",
       "password": true
     }
   ]

@@ -1,6 +1,6 @@
-# Soso Web: LLM and MCP Guide
+# Sosô Web: LLM and MCP Guide
 
-Soso is a software-development kanban workspace with private boards, configurable
+Sosô is a software-development kanban workspace with private boards, configurable
 columns, tickets, subtasks, comments, tags, assignees, due dates and attachments.
 
 ## Connect to MCP
@@ -27,7 +27,7 @@ in the file. For local Docker, use http://localhost:8061/mcp instead.
     {
       "id": "soso-token",
       "type": "promptString",
-      "description": "Soso MCP token from your profile",
+      "description": "Sosô MCP token from your profile",
       "password": true
     }
   ],

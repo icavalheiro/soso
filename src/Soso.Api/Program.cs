@@ -41,7 +41,7 @@ builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(P
 builder.Services.AddSingleton<Store>();
 builder.Services.AddSingleton<BoardService>();
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddMcpServer(options => options.ServerInfo = new() { Name = "Soso", Version = "1.0.0" })
+builder.Services.AddMcpServer(options => options.ServerInfo = new() { Name = "Sosô", Version = "1.0.0" })
     .WithHttpTransport(options => options.Stateless = true).WithTools<McpTools>();
 builder.Services.Configure<ForwardedHeadersOptions>(options => TunnelProxy.Configure(options, builder.Configuration));
 builder.Services.AddSingleton<IPasswordHasher<Account>, PasswordHasher<Account>>();

@@ -5,9 +5,14 @@ test( 'login, software tags and assignee filters', async ( { page } ) =>
 {
     await installApiMock( page, false );
     await page.goto( '/' );
+    await expect( page ).toHaveTitle( 'Sosô' );
+    await expect( page.getByRole( 'heading', { name: 'Sosô', exact: true } ) ).toBeVisible();
+    await expect( page.getByRole( 'img', { name: 'Sosô', exact: true } ) ).toBeVisible();
     await page.getByLabel( 'Email' ).fill( 'maya@example.test' );
     await page.getByRole( 'textbox', { name: /^Password/ } ).fill( 'Test-only-browser-password!' );
     await page.getByRole( 'button', { name: 'Sign in', exact: true } ).click();
+    await expect( page.locator( '.brand strong' ) ).toHaveText( 'Sosôworkspace' );
+    await expect( page.locator( '.workspace-label' ) ).toHaveText( 'Sosô' );
     await expect( page.locator( '.ticket' ) ).toHaveCount( 4 );
     await page.getByRole( 'button', { name: 'Bug', exact: true } ).click();
     await expect( page.locator( '.ticket' ) ).toHaveCount( 1 );
