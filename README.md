@@ -4,7 +4,7 @@
   <img src="logo.jpg" alt="Logo do Sosô" width="240" />
 </p>
 
-A lightweight software-development kanban workspace built with ASP.NET Core 10 minimal APIs, LiteDB, React, TypeScript, Vite and Mantine.
+A lightweight, llm/mcp friendly, software-development kanban workspace built with ASP.NET Core 10 minimal APIs, LiteDB, React, TypeScript, Vite and Mantine.
 
 ## Workspace
 
