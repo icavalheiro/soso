@@ -123,8 +123,14 @@ public sealed class BoardService(Store store)
             ValidateInput(request);
             var board = RequireBoard(boardId, user);
             CheckColumn(board, request.ColumnId);
+            var tags = request.Tags ?? [];
+            var validTags = tags.All(AllowedTags.Contains);
+            if (!validTags)
+            {
+                throw new ApiException(400, "Tags must classify software work: bug, feature, design, docs, refactor, test, chore or research.");
+            }
             var position = store.Tickets.Find(ticket => ticket.BoardId == boardId).Select(ticket => ticket.Position).DefaultIfEmpty(0).Max() + 1024;
-            var ticket = new Ticket { BoardId = boardId, ColumnId = request.ColumnId, Title = Text(request.Title, 160), Position = position };
+            var ticket = new Ticket { BoardId = boardId, ColumnId = request.ColumnId, Title = Text(request.Title, 160), Description = request.Description?.Trim() ?? "", Tags = tags.Distinct().ToList(), Position = position };
             store.Tickets.Insert(ticket);
             return ticket;
         }
@@ -168,6 +174,37 @@ public sealed class BoardService(Store store)
         }
     }
 
+    public Ticket PatchTicket(string boardId, string ticketId, PatchTicketRequest request, ClaimsPrincipal user)
+    {
+        lock (store.Gate)
+        {
+            ValidateInput(request);
+            var ticket = RequireTicket(boardId, ticketId, user);
+            CheckRevision(ticket.Revision, request.Revision);
+            var conflictingAssignee = request.ClearAssignee && request.AssigneeId is not null;
+            var conflictingDueDate = request.ClearDueDate && request.DueDate is not null;
+            if (conflictingAssignee || conflictingDueDate)
+            {
+                throw new ApiException(400, "Do not supply a value and its clear flag together.");
+            }
+            var dueDate = ticket.DueDate is null ? (DateTimeOffset?)null : new DateTimeOffset(DateTime.SpecifyKind(ticket.DueDate.Value, DateTimeKind.Utc));
+            var subtasks = request.Subtasks ?? ticket.Subtasks.Select(task => new SubtaskRequest(task.Id, task.Title, task.Done)).ToArray();
+            var update = new UpdateTicketRequest(
+                request.Title ?? ticket.Title,
+                request.Description ?? ticket.Description ?? "",
+                request.ColumnId ?? ticket.ColumnId,
+                request.Priority ?? ticket.Priority,
+                request.ClearAssignee ? null : request.AssigneeId ?? ticket.AssigneeId,
+                request.ClearDueDate ? null : request.DueDate ?? dueDate,
+                request.Position ?? ticket.Position,
+                subtasks,
+                request.Tags ?? ticket.Tags.ToArray(),
+                request.Archived ?? ticket.Archived,
+                request.Revision);
+            return UpdateTicket(boardId, ticketId, update, user);
+        }
+    }
+
     public Ticket[] CreateTickets(string boardId, CreateTicketRequest[] tickets, ClaimsPrincipal user)
     {
         CheckBatch(tickets);
@@ -193,7 +230,7 @@ public sealed class BoardService(Store store)
         return store.Transaction(() =>
         {
             RequireBoard(boardId, user);
-            return tickets.Select(ticket => UpdateTicket(boardId, ticket.TicketId, ticket.Update, user)).ToArray();
+            return tickets.Select(ticket => PatchTicket(boardId, ticket.TicketId, ticket.Update, user)).ToArray();
         });
     }
 

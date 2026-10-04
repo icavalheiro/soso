@@ -76,6 +76,14 @@ development, not public deployments.
   invent IDs or assume a column named Done exists.
 - A column's isDone flag marks completion. Archived is a separate ticket property:
   moving into a done column does not automatically archive a ticket.
+- Description is the durable work specification: context, expected behavior and
+  acceptance criteria. Never replace it with a progress log or "completed" text.
+- Comments record progress, decisions, blockers and verification results. They
+  do not replace description and do not change status. A completion comment while
+  the ticket remains in a non-done column does NOT complete the ticket.
+- When work is complete, move the ticket to a real column with isDone=true and
+  verify the returned columnId. If no suitable column exists, ask the board owner;
+  do not invent a column ID or announce the ticket as completed.
 - get_board returns the board, its tickets (including archived tickets) and a
   minimal member directory. Filter archived tickets explicitly when appropriate.
 - A ticket's integer revision guards updates. The board also has a revision, but
@@ -97,24 +105,35 @@ get_board(boardId: string)
   Returns board, tickets and members. Read it before editing to obtain current
   ticket properties, revisions and valid column/member IDs.
 
-create_ticket(boardId: string, columnId: string, title: string)
-  Creates a ticket in an existing board column and returns the created ticket.
-  Title must be nonblank and at most 160 characters. No revision argument.
-  Use update_ticket afterwards to set additional properties.
+create_ticket(boardId: string, columnId: string, title: string,
+              description: string, tags: string[])
+  Creates a ticket with its specification and classification saved together.
+  ALL five arguments are required. Title must be nonblank and at most 160
+  characters. Description must be nonblank and at most 12000 characters; include
+  context, expected behavior and acceptance criteria. Supply 1 to 8 appropriate
+  software-work tags from the fixed set below. No revision argument. Missing or
+  blank descriptions and missing or empty tags are rejected, not deferred to a
+  later update. Do not put the specification in add_comment instead.
 
 create_tickets(boardId: string, tickets: array)
   Atomically inserts 1 to 100 tickets in one accessible board. Each item is an
-  object with title and columnId, following create_ticket limits. Returns the
+  object with title, columnId, description and tags, ALL required, following
+  create_ticket limits. Returns the
   created tickets in input order. Any invalid item rolls back the entire batch.
-  Example tickets: [{"title": "First task", "columnId": "REAL-COLUMN-ID"}].
+  Example tickets: [{"title": "Fix login", "columnId": "REAL-COLUMN-ID",
+    "description": "Expired sessions must return to login without losing navigation.",
+    "tags": ["bug", "test"]}].
 
 update_tickets(boardId: string, tickets: array)
   Atomically updates 1 to 100 distinct tickets in one accessible board. Each item
-  has ticketId and update; update contains the complete update_ticket properties
-  described below, including that ticket's current revision. Duplicate ticket IDs
+  has ticketId and update; update contains that ticket's current revision plus
+  ONLY fields to change, using the partial update_ticket semantics below.
+  Omitted or null fields preserve their current values. Duplicate ticket IDs
   are rejected. Returns updated tickets in input order. Any validation, access or
-  revision failure rolls back every update in the batch. This is not a partial
-  patch. Re-read and reconcile the entire batch after a revision conflict.
+  revision failure rolls back every update in the batch. Re-read and reconcile
+  the entire batch after a revision conflict.
+  Example tickets: [{"ticketId": "REAL-TICKET-ID",
+    "update": {"revision": 3, "priority": "high"}}].
 
 search_tickets(query: string, boardId?: string, includeArchived?: boolean,
                offset?: integer, limit?: integer)
@@ -132,23 +151,38 @@ move_ticket(boardId: string, ticketId: string, columnId: string, revision: integ
   Moves a ticket to another column in the same board, preserving other editable
   properties, including its position and archive state. Returns the updated ticket.
   Does not transfer tickets between boards or reorder their position.
+  This is how status changes: when completing work, use the ID of a column whose
+  isDone flag is true and verify the returned columnId. Preserve the description.
 
 add_comment(boardId: string, ticketId: string, text: string)
-  Appends a comment attributed to the caller and returns the updated ticket.
+  Appends progress, decisions, blockers or verification results attributed to the
+  caller and returns the updated ticket. NEVER use it as a substitute for the
+  description/specification. It does not change status or mark work completed.
   Text must be nonblank and at most 4000 characters; at most 1000 comments per
   ticket. No revision argument, but adding a comment increments ticket revision.
+  Use the returned revision for a subsequent move_ticket or update_ticket.
 
 update_ticket(boardId: string, ticketId: string, update: object)
-  Replaces the editable ticket properties and returns the updated ticket. This is
-  NOT a partial patch: copy current properties from get_board, change only the
-  intended fields and send the complete update object. Missing fields can cause
-  validation failures or unintended resets. The update properties are:
+  Partially patches editable properties and returns the updated ticket. Send the
+  current ticket revision plus ONLY fields to change. Omitted or null fields are
+  preserved; do not copy the entire ticket. Explicit false, zero, empty strings
+  and empty arrays are applied (subject to validation), not treated as omitted.
+  Arrays, when supplied, replace their whole collection, not individual entries.
+  Comments and images are preserved and are not editable through this tool.
+  The update properties are:
+  - revision: REQUIRED current ticket revision from get_board or a successful write.
   - title: nonblank string, at most 160 characters.
-  - description: string, at most 12000 characters; empty string is allowed.
-  - columnId: an existing column ID in this board.
+  - description: work specification, at most 12000 characters; "" explicitly
+    clears it. Do not change it to a completion announcement or progress report.
+  - columnId: an existing column ID in this board; this is the ticket's status.
+    Completion requires a column with isDone=true, not text saying "completed".
   - priority: low, normal, high or urgent.
-  - assigneeId: board owner/member ID, or null to clear the assignee.
-  - dueDate: ISO 8601 timestamp with an offset, or null to clear; stored as UTC.
+  - assigneeId: board owner/member ID. Omitted/null preserves the current assignee.
+  - clearAssignee: true explicitly removes the assignee. Do not combine true
+    with a non-null assigneeId. Default false.
+  - dueDate: ISO 8601 timestamp with an offset; stored as UTC. Omitted/null preserves.
+  - clearDueDate: true explicitly removes the deadline. Do not combine true
+    with a non-null dueDate. Default false.
   - position: finite number with absolute value below 1000000000000; controls order.
   - subtasks: array of at most 100 objects with id, title and done. Each id must be
     unique within the ticket and nonblank, at most 32 characters. Each title must
@@ -156,7 +190,8 @@ update_ticket(boardId: string, ticketId: string, update: object)
   - tags: array of at most 8 values from bug, feature, design, docs, refactor, test,
     chore and research. Use lowercase values; duplicates are deduplicated.
   - archived: boolean; true archives, false restores.
-  - revision: current ticket revision from get_board or a successful write result.
+  Send [] to explicitly clear tags/subtasks. Keep existing collection entries
+  that are not part of the requested change. Archiving is not completion.
 
 ### Ticket Tags
 
@@ -174,17 +209,18 @@ Choose the tags that match the requested work:
 - research: investigate a problem, explore options or validate a technical idea.
 
 A ticket can have multiple tags, such as ["bug", "test"] for a fix with regression
-tests, or no tags. Only these eight lowercase values are supported; do not invent
+tests. MCP creation requires at least one appropriate tag; older/browser-created
+tickets may have no tags. Only these eight lowercase values are supported; do not invent
 custom tags or use display labels as values. At most 8 entries may be supplied,
 and duplicates are removed when saved.
 
-Read current tags with get_board. create_ticket starts with no tags; apply them
-with update_ticket afterwards. update_ticket replaces the entire tags array,
-not just the tags being added or removed. Preserve unrelated existing tags and
-all other editable properties, and send [] only when intentionally clearing all
-tags. move_ticket preserves tags.
+Read current tags with get_board. create_ticket and create_tickets save the
+required tags together with description. In updates, omit tags to preserve them.
+A supplied tags array replaces the entire array, not just tags being added or
+removed. Preserve unrelated existing tags, and send [] only when intentionally
+clearing all tags. move_ticket preserves tags.
 
-Example arguments for update_ticket (replace IDs, revision and properties with
+Example arguments for update_ticket (replace IDs and revision with
 real values read from your board; do not apply this example blindly):
 
 ```json
@@ -192,20 +228,32 @@ real values read from your board; do not apply this example blindly):
   "boardId": "BOARD-ID",
   "ticketId": "TICKET-ID",
   "update": {
-    "title": "Validate MCP integration",
-    "description": "Check authenticated tool discovery and board access.",
-    "columnId": "COLUMN-ID",
-    "priority": "normal",
-    "assigneeId": null,
-    "dueDate": null,
-    "position": 1024,
-    "subtasks": [],
-    "tags": ["test"],
-    "archived": false,
+    "priority": "high",
     "revision": 1
   }
 }
 ```
+
+This changes priority only. Description, tags, subtasks, assignee, due date,
+column, position, archive state, comments and images remain unchanged.
+
+To unassign and remove the deadline only, send:
+{"revision": CURRENT-TICKET-REVISION, "clearAssignee": true, "clearDueDate": true}.
+
+### Specification, Progress and Completion
+
+- New work: create with a meaningful description and appropriate tags. Description
+  explains what needs to change and how to validate it, not what the agent has done.
+- Existing incomplete metadata: repair description/tags with a partial update,
+  preserving existing specifications and unrelated classifications.
+- Work in progress: use comments for findings, decisions, blockers and test results.
+  Keep the ticket in the correct non-done column while work remains unfinished.
+- Finished work: preserve the specification; record the outcome and verification
+  in a comment if needed, then use its returned revision to move the ticket to an
+  isDone=true column. Alternatively, patch columnId with the current revision.
+  Verify the resulting columnId before reporting the ticket as completed.
+- A description/comment saying "done" does not override a non-done column. Do not
+  report completion when a move failed or the returned ticket is still in progress.
 
 ## Safe Agent Workflow
 
@@ -216,7 +264,8 @@ real values read from your board; do not apply this example blindly):
 3. Explain the intended mutations and obtain human approval before writing.
    Keep read-only requests read-only and leave unrelated tickets unchanged.
 4. Use current ticket revisions and preserve fields not requested for change.
-   After a write, use its returned revision or fetch the board again.
+  For updates, omit unrelated fields. After a write, use its returned revision
+  or fetch the board again. Completion requires a verified isDone=true column.
 5. On a conflict, fetch fresh data, compare with the intended change and ask for
    clarification if necessary. Never blindly overwrite someone else's changes.
 6. Do not automatically retry create_ticket, create_tickets or add_comment after
@@ -233,7 +282,8 @@ not restricted to the board currently visible in the browser.
 - Permission failure / HTTP 403 or not found / HTTP 404: check board membership
   and IDs. Inaccessible boards are intentionally reported as not found.
 - Invalid input / HTTP 400: inspect the live tool schema, limits, allowed tags,
-  column/assignee IDs and complete update properties.
+  column/assignee IDs, required creation description/tags and update revision.
+  Clearing nullable fields requires clearAssignee/clearDueDate, not null.
 - Revision conflict / HTTP 409: re-read the ticket and reconcile; do not reuse
   the stale revision. Tool failures may appear as MCP errors rather than HTTP
   statuses; inspect the client's tool result as well.

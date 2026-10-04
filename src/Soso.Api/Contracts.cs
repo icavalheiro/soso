@@ -1,4 +1,6 @@
+using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace Soso.Api;
 
@@ -24,10 +26,29 @@ public sealed record UpdateBoardRequest([Required, MaxLength(80)] string Name, [
 /// <summary>Column definition.</summary>
 public sealed record ColumnRequest([Required, MaxLength(32)] string Id, [Required, MaxLength(60)] string Name, bool IsDone);
 /// <summary>New ticket in a board column.</summary>
-public sealed record CreateTicketRequest([Required, MaxLength(160)] string Title, [Required, MaxLength(32)] string ColumnId);
+public sealed record CreateTicketRequest([Required, MaxLength(160)] string Title, [Required, MaxLength(32)] string ColumnId, [MaxLength(12000)] string? Description = null, [MaxLength(8)] string[]? Tags = null);
+public sealed record McpCreateTicketRequest(
+    [Required, MaxLength(160)] string Title,
+    [Required, MaxLength(32)] string ColumnId,
+    [Required, MaxLength(12000)][property: Description("Required work specification: context, expected behavior and acceptance criteria. Not a progress log or completion announcement.")] string Description,
+    [Required, MinLength(1), MaxLength(8)][property: Description("Required lowercase work categories: bug, feature, design, docs, refactor, test, chore, research. Not status or priority.")] string[] Tags);
 /// <summary>Editable ticket content with optimistic concurrency.</summary>
 public sealed record UpdateTicketRequest([Required, MaxLength(160)] string Title, [Required(AllowEmptyStrings = true), MaxLength(12000)] string Description, [Required, MaxLength(32)] string ColumnId, [Required, RegularExpression("^(low|normal|high|urgent)$")] string Priority, string? AssigneeId, DateTimeOffset? DueDate, double Position, [Required, MaxLength(100)] SubtaskRequest[] Subtasks, [Required, MaxLength(8)] string[] Tags, bool Archived, int Revision);
-public sealed record BatchTicketUpdateRequest([Required, MaxLength(32)] string TicketId, [Required] UpdateTicketRequest Update);
+public sealed record PatchTicketRequest(
+    [property: JsonRequired, Description("Required current TICKET revision from get_board or a successful write. Never use the board revision.")] int Revision,
+    [MaxLength(160)] string? Title = null,
+    [MaxLength(12000)][property: Description("Work specification and acceptance criteria, not progress or completion. Omit to preserve; empty string explicitly clears.")] string? Description = null,
+    [MaxLength(32)][property: Description("Status is the column. To complete, use a real column whose isDone is true. Omit to preserve status.")] string? ColumnId = null,
+    [RegularExpression("^(low|normal|high|urgent)$")] string? Priority = null,
+    [property: Description("Owner/member ID to assign. Omit or null preserves; use clearAssignee=true to unassign.")] string? AssigneeId = null,
+    [property: Description("ISO 8601 timestamp with offset. Omit or null preserves; use clearDueDate=true to remove the deadline.")] DateTimeOffset? DueDate = null,
+    double? Position = null,
+    [MaxLength(100)][property: Description("Omit to preserve. Supplied array replaces the checklist; preserve existing IDs. [] clears.")] SubtaskRequest[]? Subtasks = null,
+    [MaxLength(8)][property: Description("Omit to preserve. Supplied array replaces all tags; preserve unrelated tags. [] clears. Allowed: bug, feature, design, docs, refactor, test, chore, research.")] string[]? Tags = null,
+    bool? Archived = null,
+    [property: Description("Explicitly remove the assignee. Do not combine true with assigneeId.")] bool ClearAssignee = false,
+    [property: Description("Explicitly remove the deadline. Do not combine true with dueDate.")] bool ClearDueDate = false);
+public sealed record BatchTicketUpdateRequest([Required, MaxLength(32)] string TicketId, [Required] PatchTicketRequest Update);
 public sealed record TicketSearchResponse(Ticket[] Tickets, int Total, int Offset, int Limit);
 /// <summary>Editable checklist entry.</summary>
 public sealed record SubtaskRequest([Required, MaxLength(32)] string Id, [Required, MaxLength(300)] string Title, bool Done);

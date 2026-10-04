@@ -77,6 +77,14 @@ public sealed class SecurityTests
 
     private static UpdateTicketRequest Edit(Ticket ticket, string[]? tags = null, bool archived = false) => new(ticket.Title, ticket.Description, ticket.ColumnId, ticket.Priority, ticket.AssigneeId, null, ticket.Position, [], tags ?? [], archived, ticket.Revision);
 
+    private static PatchTicketRequest Patch(Ticket ticket, string[]? tags = null) => new(ticket.Revision, Tags: tags);
+
+    private static JsonElement McpMessage(string body)
+    {
+        var json = body.TrimStart().StartsWith('{') ? body : body.Split('\n').Single(line => line.StartsWith("data:", StringComparison.Ordinal))[5..];
+        return JsonSerializer.Deserialize<JsonElement>(json);
+    }
+
     private static void WithMcp(Action<BoardService, McpTools, ClaimsPrincipal, HttpContextAccessor, Store> test)
     {
         var path = Path.Combine(Path.GetTempPath(), "soso-mcp-tests-" + Guid.NewGuid().ToString("N"));
@@ -105,12 +113,12 @@ public sealed class SecurityTests
         {
             var board = service.Create(new("Batch", ""), user);
             var column = board.Columns[0].Id;
-            Assert.Equal(400, Assert.Throws<ApiException>(() => tools.CreateTickets(board.Id, [new("Valid", column), new("Invalid", "missing")])).Status);
+            Assert.Equal(400, Assert.Throws<ApiException>(() => tools.CreateTickets(board.Id, [new("Valid", column, "Requested work", ["test"]), new("Invalid", "missing", "Requested work", ["test"])])).Status);
             Assert.Empty(tools.GetBoard(board.Id).Tickets);
-            var tickets = tools.CreateTickets(board.Id, [new("First", column), new("Second", column)]);
+            var tickets = tools.CreateTickets(board.Id, [new("First", column, "Requested work", ["test"]), new("Second", column, "Requested work", ["test"])]);
             Assert.Equal(2, tickets.Length);
             Assert.True(tickets[1].Position > tickets[0].Position);
-            var updates = tickets.Select(ticket => new BatchTicketUpdateRequest(ticket.Id, Edit(ticket) with { Title = ticket.Title + " updated" })).ToArray();
+            var updates = tickets.Select(ticket => new BatchTicketUpdateRequest(ticket.Id, Patch(ticket) with { Title = ticket.Title + " updated" })).ToArray();
             Assert.Equal(409, Assert.Throws<ApiException>(() => tools.UpdateTickets(board.Id, [updates[0], updates[1] with { Update = updates[1].Update with { Revision = -1 } }])).Status);
             var unchanged = tools.GetBoard(board.Id).Tickets;
             Assert.Equal(tickets.Select(ticket => ticket.Title), unchanged.Select(ticket => ticket.Title));
@@ -120,12 +128,105 @@ public sealed class SecurityTests
             Assert.All(changed, ticket => Assert.EndsWith(" updated", ticket.Title));
             Assert.Equal(tickets.Select(ticket => ticket.Revision + 1), changed.Select(ticket => ticket.Revision));
             Assert.Equal(400, Assert.Throws<ApiException>(() => tools.CreateTickets(board.Id, [])).Status);
-            Assert.Equal(400, Assert.Throws<ApiException>(() => tools.CreateTickets(board.Id, Enumerable.Repeat(new CreateTicketRequest("Too many", column), 101).ToArray())).Status);
+            Assert.Equal(400, Assert.Throws<ApiException>(() => tools.CreateTickets(board.Id, Enumerable.Repeat(new McpCreateTicketRequest("Too many", column, "Requested work", ["test"]), 101).ToArray())).Status);
             Assert.Equal(400, Assert.Throws<ApiException>(() => tools.CreateTickets(board.Id, [null!])).Status);
-            Assert.Equal(400, Assert.Throws<ApiException>(() => tools.UpdateTickets(board.Id, [new(changed[0].Id, Edit(changed[0])), new(changed[1].Id, Edit(changed[1]) with { Subtasks = [null!] })])).Status);
+            Assert.Equal(400, Assert.Throws<ApiException>(() => tools.UpdateTickets(board.Id, [new(changed[0].Id, Patch(changed[0]) with { Title = "Must roll back" }), new(changed[1].Id, Patch(changed[1]) with { Subtasks = [null!] })])).Status);
+            Assert.Equal(changed.Select(ticket => ticket.Title), tools.GetBoard(board.Id).Tickets.Select(ticket => ticket.Title));
             accessor.HttpContext!.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "outsider")], "test"));
-            Assert.Equal(404, Assert.Throws<ApiException>(() => tools.CreateTickets(board.Id, [new("Forbidden", column)])).Status);
-            Assert.Equal(404, Assert.Throws<ApiException>(() => tools.UpdateTickets(board.Id, [new(changed[0].Id, Edit(changed[0]))])).Status);
+            Assert.Equal(404, Assert.Throws<ApiException>(() => tools.CreateTickets(board.Id, [new("Forbidden", column, "Requested work", ["test"])])).Status);
+            Assert.Equal(404, Assert.Throws<ApiException>(() => tools.UpdateTickets(board.Id, [new(changed[0].Id, Patch(changed[0]))])).Status);
+        });
+    }
+
+    [Fact]
+    public void McpCreationRequiresSpecificationAndWorkTags()
+    {
+        WithMcp((service, tools, user, accessor, store) =>
+        {
+            var board = service.Create(new("Specifications", ""), user);
+            var column = board.Columns[0].Id;
+            Assert.Equal(400, Assert.Throws<ApiException>(() => tools.CreateTicket(board.Id, column, "Empty description", " ", ["bug"])).Status);
+            Assert.Equal(400, Assert.Throws<ApiException>(() => tools.CreateTicket(board.Id, column, "Missing description", null!, ["bug"])).Status);
+            Assert.Equal(400, Assert.Throws<ApiException>(() => tools.CreateTicket(board.Id, column, "Empty tags", "Fix the defect", [])).Status);
+            Assert.Equal(400, Assert.Throws<ApiException>(() => tools.CreateTicket(board.Id, column, "Missing tags", "Fix the defect", null!)).Status);
+            Assert.Equal(400, Assert.Throws<ApiException>(() => tools.CreateTicket(board.Id, column, "Status is not a tag", "Fix the defect", ["done"])).Status);
+            Assert.Equal(400, Assert.Throws<ApiException>(() => tools.CreateTicket(board.Id, column, "Long description", new string('x', 12001), ["bug"])).Status);
+            Assert.Equal(400, Assert.Throws<ApiException>(() => tools.CreateTickets(board.Id, [new("Valid", column, "Fix the defect", ["bug"]), new("Invalid", column, "", ["test"])])).Status);
+            Assert.Equal(400, Assert.Throws<ApiException>(() => tools.CreateTickets(board.Id, [new("Valid", column, "Fix the defect", ["bug"]), new("Invalid", column, "Fix the defect", ["custom"])])).Status);
+            Assert.Empty(tools.GetBoard(board.Id).Tickets);
+            var created = tools.CreateTicket(board.Id, column, "Fix a defect", "  Context, expected behavior and acceptance criteria.  ", ["bug", "test", "bug"]);
+            var saved = Assert.Single(tools.GetBoard(board.Id).Tickets);
+            Assert.Equal(created.Id, saved.Id);
+            Assert.Equal("Context, expected behavior and acceptance criteria.", saved.Description);
+            Assert.Equal(new[] { "bug", "test" }, saved.Tags);
+            Assert.Empty(saved.Comments);
+            var legacy = service.CreateTicket(board.Id, new("Browser client", column), user);
+            Assert.Empty(legacy.Description);
+            Assert.Empty(legacy.Tags);
+        });
+    }
+
+    [Fact]
+    public void McpPartialUpdatesPreserveOmittedFieldsAndClearOnlyExplicitValues()
+    {
+        WithMcp((service, tools, user, accessor, store) =>
+        {
+            var board = service.Create(new("Patches", ""), user);
+            var ticket = tools.CreateTicket(board.Id, board.Columns[1].Id, "Original title", "Original specification and acceptance criteria", ["bug", "test"]);
+            var deadline = new DateTimeOffset(2026, 11, 1, 12, 0, 0, TimeSpan.FromHours(3));
+            ticket = service.UpdateTicket(board.Id, ticket.Id, Edit(ticket, ["bug", "test"], true) with { Priority = "urgent", AssigneeId = "owner", DueDate = deadline, Position = 2048, Subtasks = [new("existing-task", "Verify behavior", true)] }, user);
+            ticket = tools.AddComment(board.Id, ticket.Id, "Investigation notes");
+            ticket.Images.Add("existing-image");
+            store.Tickets.Update(ticket);
+            ticket = Assert.Single(tools.GetBoard(board.Id).Tickets);
+            var before = JsonSerializer.SerializeToElement(ticket, JsonOptions);
+            var patched = tools.UpdateTicket(board.Id, ticket.Id, new(ticket.Revision, Priority: "high"));
+            var after = JsonSerializer.SerializeToElement(patched, JsonOptions);
+            foreach (var property in before.EnumerateObject())
+            {
+                var changedProperty = property.Name is "revision" or "priority";
+                if (!changedProperty)
+                {
+                    Assert.Equal(property.Value.GetRawText(), after.GetProperty(property.Name).GetRawText());
+                }
+            }
+            Assert.Equal("high", patched.Priority);
+            Assert.Equal(ticket.Revision + 1, patched.Revision);
+            Assert.Equal(409, Assert.Throws<ApiException>(() => tools.UpdateTicket(board.Id, ticket.Id, new(ticket.Revision, Title: "Stale"))).Status);
+            var nullPatch = JsonSerializer.Deserialize<PatchTicketRequest>(JsonSerializer.Serialize(new { revision = patched.Revision, assigneeId = (string?)null, dueDate = (string?)null }), JsonOptions)!;
+            patched = tools.UpdateTicket(board.Id, ticket.Id, nullPatch);
+            Assert.Equal("owner", patched.AssigneeId);
+            Assert.Equal(deadline.UtcDateTime, patched.DueDate);
+            Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<PatchTicketRequest>("{\"priority\":\"high\"}", JsonOptions));
+            Assert.Equal(400, Assert.Throws<ApiException>(() => tools.UpdateTicket(board.Id, ticket.Id, new(patched.Revision, AssigneeId: "owner", ClearAssignee: true))).Status);
+            Assert.Equal(400, Assert.Throws<ApiException>(() => tools.UpdateTicket(board.Id, ticket.Id, new(patched.Revision, DueDate: deadline, ClearDueDate: true))).Status);
+            Assert.Equal(400, Assert.Throws<ApiException>(() => tools.UpdateTicket(board.Id, ticket.Id, new(patched.Revision, Priority: "invalid"))).Status);
+            var completed = tools.MoveTicket(board.Id, ticket.Id, board.Columns.Single(column => column.IsDone).Id, patched.Revision);
+            Assert.True(board.Columns.Single(column => column.Id == completed.ColumnId).IsDone);
+            Assert.Equal(ticket.Description, completed.Description);
+            Assert.Equal(ticket.Tags, completed.Tags);
+            Assert.Equal(ticket.AssigneeId, completed.AssigneeId);
+            Assert.Equal(ticket.DueDate, completed.DueDate);
+            Assert.Equal(ticket.Position, completed.Position);
+            Assert.True(completed.Archived);
+            Assert.Single(completed.Subtasks);
+            Assert.Single(completed.Comments);
+            Assert.Single(completed.Images);
+            var cleared = tools.UpdateTicket(board.Id, ticket.Id, new(completed.Revision, Description: "", Position: 0, Subtasks: [], Tags: [], Archived: false, ClearAssignee: true, ClearDueDate: true));
+            Assert.Empty(cleared.Description);
+            Assert.Empty(cleared.Tags);
+            Assert.Empty(cleared.Subtasks);
+            Assert.False(cleared.Archived);
+            Assert.Equal(0, cleared.Position);
+            Assert.Null(cleared.AssigneeId);
+            Assert.Null(cleared.DueDate);
+            Assert.Single(cleared.Comments);
+            Assert.Single(cleared.Images);
+            var reloaded = Assert.Single(tools.GetBoard(board.Id).Tickets);
+            Assert.Equal(cleared.Revision, reloaded.Revision);
+            Assert.Null(reloaded.AssigneeId);
+            Assert.Null(reloaded.DueDate);
+            Assert.False(reloaded.Archived);
         });
     }
 
@@ -135,17 +236,17 @@ public sealed class SecurityTests
         WithMcp((service, tools, user, accessor, store) =>
         {
             var board = service.Create(new("Visible", ""), user);
-            var tickets = tools.CreateTickets(board.Id, Enumerable.Range(0, 6).Select(index => new CreateTicketRequest(index == 0 ? "Needle title" : "Ticket " + index, board.Columns[0].Id)).ToArray());
+            var tickets = tools.CreateTickets(board.Id, Enumerable.Range(0, 6).Select(index => new McpCreateTicketRequest(index == 0 ? "Needle title" : "Ticket " + index, board.Columns[0].Id, "Requested work", ["test"])).ToArray());
             Assert.Equal(tickets[0].Id, Assert.Single(tools.SearchTickets("needle").Tickets).Id);
             var byId = tools.SearchTickets(tickets[0].Id.ToUpperInvariant());
             Assert.Equal(1, byId.Total);
             Assert.Equal(tickets[0].Id, Assert.Single(byId.Tickets).Id);
             Assert.Contains(tools.SearchTickets(tickets[0].Id[..8], board.Id).Tickets, ticket => ticket.Id == tickets[0].Id);
-            tools.UpdateTicket(board.Id, tickets[1].Id, Edit(tickets[1]) with { Description = "Needle description" });
-            tools.UpdateTicket(board.Id, tickets[2].Id, Edit(tickets[2]) with { Subtasks = [new("task", "Needle subtask", false)] });
+            tools.UpdateTicket(board.Id, tickets[1].Id, Patch(tickets[1]) with { Description = "Needle description" });
+            tools.UpdateTicket(board.Id, tickets[2].Id, Patch(tickets[2]) with { Subtasks = [new("task", "Needle subtask", false)] });
             tools.AddComment(board.Id, tickets[3].Id, "Needle comment");
-            tools.UpdateTicket(board.Id, tickets[4].Id, Edit(tickets[4]) with { Title = "Needle archive", Archived = true });
-            tools.UpdateTicket(board.Id, tickets[5].Id, Edit(tickets[5], ["research"]));
+            tools.UpdateTicket(board.Id, tickets[4].Id, Patch(tickets[4]) with { Title = "Needle archive", Archived = true });
+            tools.UpdateTicket(board.Id, tickets[5].Id, Patch(tickets[5], ["research"]));
             var privateUser = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "other")], "test"));
             var hidden = service.Create(new("Hidden", ""), privateUser);
             var hiddenTicket = service.CreateTicket(hidden.Id, new("Needle secret", hidden.Columns[0].Id), privateUser);
@@ -187,7 +288,7 @@ public sealed class SecurityTests
             Assert.Empty(tools.SearchTickets("needle").Tickets);
             Assert.Empty(tools.SearchTickets(assignedTicket.Id).Tickets);
             Assert.Equal(404, Assert.Throws<ApiException>(() => tools.GetBoard(board.Id)).Status);
-            Assert.Equal(404, Assert.Throws<ApiException>(() => tools.CreateTickets(board.Id, [new("Denied", board.Columns[0].Id)])).Status);
+            Assert.Equal(404, Assert.Throws<ApiException>(() => tools.CreateTickets(board.Id, [new("Denied", board.Columns[0].Id, "Requested work", ["test"])])).Status);
             token.BoardIds = [board.Id];
             store.Tokens.Update(token);
             Assert.Equal(board.Id, Assert.Single(tools.ListBoards()).Id);
@@ -197,12 +298,12 @@ public sealed class SecurityTests
             Assert.Empty(tools.SearchTickets(unassignedTicket.Id).Tickets);
             Assert.Equal(404, Assert.Throws<ApiException>(() => tools.GetBoard(hidden.Id)).Status);
             Assert.Equal(404, Assert.Throws<ApiException>(() => tools.SearchTickets("needle", hidden.Id)).Status);
-            var created = tools.CreateTickets(board.Id, [new("Allowed", board.Columns[0].Id)]);
-            tools.UpdateTickets(board.Id, [new(created[0].Id, Edit(created[0]) with { Title = "Updated" })]);
+            var created = tools.CreateTickets(board.Id, [new("Allowed", board.Columns[0].Id, "Requested work", ["test"])]);
+            tools.UpdateTickets(board.Id, [new(created[0].Id, Patch(created[0]) with { Title = "Updated" })]);
             token.BoardIds = [];
             store.Tokens.Update(token);
             Assert.Empty(tools.ListBoards());
-            Assert.Equal(404, Assert.Throws<ApiException>(() => tools.UpdateTickets(board.Id, [new(created[0].Id, Edit(created[0]))])).Status);
+            Assert.Equal(404, Assert.Throws<ApiException>(() => tools.UpdateTickets(board.Id, [new(created[0].Id, Patch(created[0]))])).Status);
             Assert.Equal(2, service.List(user).Length);
             token.BoardIds = [board.Id];
             token.ExpiresAt = DateTime.UtcNow.AddMinutes(-1);
@@ -409,6 +510,7 @@ public sealed class SecurityTests
         mcp.DefaultRequestHeaders.Accept.ParseAdd("text/event-stream");
         var initialize = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 1, method = "initialize", @params = new { protocolVersion = "2025-06-18", capabilities = new { }, clientInfo = new { name = "security-tests", version = "1.0" } } });
         Assert.Equal(HttpStatusCode.OK, initialize.StatusCode);
+        Assert.Equal(McpTools.WorkflowInstructions, McpMessage(await initialize.Content.ReadAsStringAsync()).GetProperty("result").GetProperty("instructions").GetString());
         var tools = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 2, method = "tools/list", @params = new { } });
         Assert.Equal(HttpStatusCode.OK, tools.StatusCode);
         var body = await tools.Content.ReadAsStringAsync();
@@ -417,6 +519,15 @@ public sealed class SecurityTests
         Assert.Contains("update_tickets", body);
         Assert.Contains("search_tickets", body);
         Assert.DoesNotContain("CreateAccount", body);
+        var discoveredTools = McpMessage(body).GetProperty("result").GetProperty("tools").EnumerateArray().ToArray();
+        var createSchema = discoveredTools.Single(tool => tool.GetProperty("name").GetString() == "create_ticket").GetProperty("inputSchema");
+        Assert.Contains(createSchema.GetProperty("required").EnumerateArray(), field => field.GetString() == "description");
+        Assert.Contains(createSchema.GetProperty("required").EnumerateArray(), field => field.GetString() == "tags");
+        var batchCreateSchema = discoveredTools.Single(tool => tool.GetProperty("name").GetString() == "create_tickets").GetProperty("inputSchema").GetProperty("properties").GetProperty("tickets").GetProperty("items");
+        Assert.Contains(batchCreateSchema.GetProperty("required").EnumerateArray(), field => field.GetString() == "description");
+        Assert.Contains(batchCreateSchema.GetProperty("required").EnumerateArray(), field => field.GetString() == "tags");
+        var patchSchema = discoveredTools.Single(tool => tool.GetProperty("name").GetString() == "update_ticket").GetProperty("inputSchema").GetProperty("properties").GetProperty("update");
+        Assert.Equal("revision", Assert.Single(patchSchema.GetProperty("required").EnumerateArray()).GetString());
         var privateBoard = await CreateBoard(admin, "Administrator private board");
         var board = await CreateBoard(user, "Member private board");
         var tokenId = AuthEndpoints.HashToken(token);
@@ -437,17 +548,31 @@ public sealed class SecurityTests
         var callBody = await call.Content.ReadAsStringAsync();
         Assert.Contains("Member private board", callBody);
         Assert.DoesNotContain("Administrator private board", callBody);
-        using var insert = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 4, method = "tools/call", @params = new { name = "create_tickets", arguments = new { boardId = board.Id, tickets = new[] { new CreateTicketRequest("MCP batch first", board.Columns[0].Id), new CreateTicketRequest("MCP batch second", board.Columns[0].Id) } } } });
+        using var invalidInsert = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 14, method = "tools/call", @params = new { name = "create_ticket", arguments = new { boardId = board.Id, columnId = board.Columns[0].Id, title = "Missing specification" } } });
+        Assert.Contains("\"isError\":true", await invalidInsert.Content.ReadAsStringAsync());
+        using var insert = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 4, method = "tools/call", @params = new { name = "create_tickets", arguments = new { boardId = board.Id, tickets = new[] { new McpCreateTicketRequest("MCP batch first", board.Columns[0].Id, "Requested work", ["test"]), new McpCreateTicketRequest("MCP batch second", board.Columns[0].Id, "Requested work", ["test"]) } } } });
         Assert.Equal(HttpStatusCode.OK, insert.StatusCode);
         Assert.DoesNotContain("\"isError\":true", await insert.Content.ReadAsStringAsync());
         var inserted = (await user.GetFromJsonAsync<BoardResponse>($"/api/boards/{board.Id}"))!.Tickets;
         Assert.Equal(2, inserted.Length);
-        var updates = inserted.Select(ticket => new BatchTicketUpdateRequest(ticket.Id, Edit(ticket) with { Description = "Protocol search needle" })).ToArray();
+        var updates = inserted.Select(ticket => new { ticketId = ticket.Id, update = new { revision = ticket.Revision, description = "Protocol search needle" } }).ToArray();
         using var update = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 5, method = "tools/call", @params = new { name = "update_tickets", arguments = new { boardId = board.Id, tickets = updates } } });
         Assert.Equal(HttpStatusCode.OK, update.StatusCode);
         Assert.DoesNotContain("\"isError\":true", await update.Content.ReadAsStringAsync());
         var updated = (await user.GetFromJsonAsync<BoardResponse>($"/api/boards/{board.Id}"))!.Tickets;
         Assert.All(updated, ticket => Assert.Equal("Protocol search needle", ticket.Description));
+        Assert.All(updated, ticket => Assert.Equal(new[] { "test" }, ticket.Tags));
+        Assert.Equal(inserted.Select(ticket => ticket.Title), updated.Select(ticket => ticket.Title));
+        Assert.Equal(inserted.Select(ticket => ticket.Position), updated.Select(ticket => ticket.Position));
+        using var missingRevision = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 15, method = "tools/call", @params = new { name = "update_ticket", arguments = new { boardId = board.Id, ticketId = updated[0].Id, update = new { priority = "high" } } } });
+        Assert.Contains("\"isError\":true", await missingRevision.Content.ReadAsStringAsync());
+        using var priorityPatch = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 16, method = "tools/call", @params = new { name = "update_ticket", arguments = new { boardId = board.Id, ticketId = updated[0].Id, update = new { revision = updated[0].Revision, priority = "high" } } } });
+        Assert.DoesNotContain("\"isError\":true", await priorityPatch.Content.ReadAsStringAsync());
+        var priorityUpdated = (await user.GetFromJsonAsync<BoardResponse>($"/api/boards/{board.Id}"))!.Tickets.Single(ticket => ticket.Id == updated[0].Id);
+        Assert.Equal("high", priorityUpdated.Priority);
+        Assert.Equal(updated[0].Description, priorityUpdated.Description);
+        Assert.Equal(updated[0].Tags, priorityUpdated.Tags);
+        Assert.Equal(updated[0].Revision + 1, priorityUpdated.Revision);
         using var search = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 6, method = "tools/call", @params = new { name = "search_tickets", arguments = new { query = "NEEDLE", limit = 1 } } });
         Assert.Equal(HttpStatusCode.OK, search.StatusCode);
         var searchBody = await search.Content.ReadAsStringAsync();
