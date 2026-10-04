@@ -378,9 +378,7 @@ button:focus-visible {
         box-shadow 120ms;
 }
 .ticket:hover {
-    border-top-color: var(--muted);
-    border-right-color: var(--muted);
-    border-bottom-color: var(--muted);
+    border-color: var(--muted);
 }
 .priority-high {
     border-top-color: #edb627;
@@ -522,11 +520,29 @@ button:focus-visible {
     color: var(--muted);
     margin: 0 0 10px;
     line-height: 1.5;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
+    max-height: 3em;
     overflow: hidden;
     overflow-wrap: anywhere;
+}
+.ticket-excerpt :is(p, h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre) {
+    margin: 0;
+    font-size: inherit;
+    line-height: inherit;
+}
+.ticket-excerpt :is(ul, ol) {
+    padding-left: 16px;
+}
+.ticket-excerpt blockquote {
+    border-left: 2px solid var(--line);
+    padding-left: 6px;
+}
+.ticket-excerpt pre {
+    white-space: pre-wrap;
+}
+.ticket-excerpt code {
+    background: var(--canvas);
+    border-radius: 3px;
+    padding: 0 2px;
 }
 .ticket-assignee {
     display: inline-flex;

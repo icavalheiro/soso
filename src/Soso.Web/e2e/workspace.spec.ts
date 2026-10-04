@@ -333,6 +333,42 @@ test( 'drag lift animation and cross-column move', async ( { page }, testInfo ) 
 
 for ( const width of [ 1366, 390 ] )
 {
+    test( `board card Markdown preview and hover border at ${ width }px`, async ( { page }, testInfo ) =>
+    {
+        await page.setViewportSize( { width, height: 900 } );
+        const state = await installApiMock( page );
+        state.data.tickets[ 0 ].description = '**Important** with `code`, ~~obsolete~~ and [Docs](https://example.com).\n\n### Details\n\n- [x] Tested\n- [ ] Pending\n\n| Item | Status |\n| --- | --- |\n| UI | Ready |\n\n<script>window.markdownExecuted = true</script>\n\n![Hidden image](https://example.com/preview.png)\n\n[Unsafe](javascript:alert(1))';
+        for ( const theme of [ 'light', 'dark' ] as const )
+        {
+            state.account.theme = theme;
+            await page.goto( '/' );
+            const card = page.locator( '.ticket' ).filter( { hasText: 'Sketch the board layout' } );
+            const excerpt = card.locator( '.ticket-excerpt' );
+            await expect( excerpt.locator( 'strong' ) ).toHaveText( 'Important' );
+            await expect( excerpt.locator( 'code' ) ).toHaveText( 'code' );
+            await expect( excerpt.locator( 'del' ) ).toHaveText( 'obsolete' );
+            await expect( excerpt ).toContainText( 'Docs' );
+            await expect( excerpt.locator( 'h3' ) ).toHaveText( 'Details' );
+            await expect( excerpt.locator( 'table' ) ).toHaveCount( 1 );
+            await expect( excerpt.locator( 'a, input, img, script' ) ).toHaveCount( 0 );
+            expect( await excerpt.evaluate( element =>
+            {
+                const style = getComputedStyle( element );
+                return element.clientHeight <= Number.parseFloat( style.lineHeight ) * 2 + 1 && element.scrollHeight > element.clientHeight && element.scrollWidth <= element.clientWidth;
+            } ) ).toBeTruthy();
+            await card.hover();
+            const borderColor = theme === 'dark' ? 'rgb(163, 170, 174)' : 'rgb(116, 123, 138)';
+            for ( const side of [ 'top', 'right', 'bottom', 'left' ] )
+            {
+                await expect( card ).toHaveCSS( `border-${ side }-color`, borderColor );
+                await expect( card ).toHaveCSS( `border-${ side }-width`, '1px' );
+            }
+            await page.screenshot( { path: testInfo.outputPath( `board-card-hover-${ theme }.png` ) } );
+            await card.getByRole( 'button', { name: 'Open ticket: Sketch the board layout', exact: true } ).click();
+            await expect( page.locator( '.ticket-description-markdown strong' ) ).toHaveText( 'Important' );
+        }
+    } );
+
     test( `ticket description Markdown rendering and source editing at ${ width }px`, async ( { page }, testInfo ) =>
     {
         await page.setViewportSize( { width, height: 900 } );
