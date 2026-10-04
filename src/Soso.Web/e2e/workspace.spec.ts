@@ -1,6 +1,97 @@
 import { test, expect } from '@playwright/test';
 import { installApiMock } from './fixtures';
 
+for ( const width of [ 1366, 390 ] )
+{
+    test( `profile photo crop and cancellation at ${ width }px`, async ( { page }, testInfo ) =>
+    {
+        await page.setViewportSize( { width, height: 900 } );
+        const state = await installApiMock( page );
+        let uploads = 0;
+        let uploadedPhoto: Buffer | null = null;
+        await page.route( '**/api/auth/avatar', async route =>
+        {
+            uploads++;
+            const body = route.request().postDataBuffer()!;
+            const signature = Buffer.from( [ 137, 80, 78, 71, 13, 10, 26, 10 ] );
+            const start = body.indexOf( signature );
+            expect( start ).toBeGreaterThan( 0 );
+            const end = body.indexOf( Buffer.from( 'IEND' ), start ) + 8;
+            uploadedPhoto = body.subarray( start, end );
+            state.account.avatarId = 'cropped-avatar';
+            await route.fulfill( { json: state.account } );
+        } );
+        await page.goto( '/' );
+        const source = await page.evaluate( () =>
+        {
+            const canvas = document.createElement( 'canvas' );
+            canvas.width = 800;
+            canvas.height = 400;
+            const context = canvas.getContext( '2d' )!;
+            context.fillStyle = '#ff0000';
+            context.fillRect( 0, 0, 400, 400 );
+            context.fillStyle = '#0000ff';
+            context.fillRect( 400, 0, 400, 400 );
+            return canvas.toDataURL( 'image/png' ).split( ',' )[ 1 ];
+        } );
+        const file = { name: 'wide-photo.png', mimeType: 'image/png', buffer: Buffer.from( source, 'base64' ) };
+        if ( width < 768 )
+        {
+            await page.getByRole( 'button', { name: 'Expand sidebar', exact: true } ).click();
+        }
+        await page.getByRole( 'button', { name: 'Profile & settings', exact: true } ).click();
+        const input = page.locator( 'input[type="file"]' );
+        await input.setInputFiles( file );
+        const editor = page.getByRole( 'dialog', { name: 'Edit photo', exact: true } );
+        await expect( editor ).toBeVisible();
+        await expect( editor.getByRole( 'button', { name: 'Save photo', exact: true } ) ).toBeEnabled();
+        expect( uploads ).toBe( 0 );
+        await editor.getByRole( 'button', { name: 'Cancel', exact: true } ).click();
+        await expect( editor ).toBeHidden();
+        expect( state.account.avatarId ).toBeNull();
+        expect( uploads ).toBe( 0 );
+        await input.setInputFiles( file );
+        const slider = editor.getByRole( 'slider', { name: 'Photo zoom', exact: true } );
+        await slider.focus();
+        await slider.press( 'End' );
+        await expect( slider ).toHaveAttribute( 'aria-valuenow', '3' );
+        await editor.getByRole( 'button', { name: 'Reset', exact: true } ).click();
+        await expect( slider ).toHaveAttribute( 'aria-valuenow', '1' );
+        await slider.focus();
+        await slider.press( 'End' );
+        const cropper = editor.locator( '.reactEasyCrop_Container' );
+        const box = ( await cropper.boundingBox() )!;
+        await page.mouse.move( box.x + box.width / 2 + 50, box.y + box.height / 2 );
+        await page.mouse.down();
+        await page.mouse.move( box.x + box.width / 2 - 100, box.y + box.height / 2, { steps: 12 } );
+        await page.mouse.up();
+        await expect( slider ).toHaveAttribute( 'aria-valuenow', '3' );
+        await expect( editor.getByRole( 'button', { name: 'Save photo', exact: true } ) ).toBeEnabled();
+        await page.screenshot( { path: testInfo.outputPath( 'avatar-crop.png' ) } );
+        expect( await editor.evaluate( element => element.getBoundingClientRect().right <= window.innerWidth ) ).toBeTruthy();
+        await editor.getByRole( 'button', { name: 'Save photo', exact: true } ).click();
+        await expect( editor ).toBeHidden();
+        expect( uploads ).toBe( 1 );
+        expect( state.account.avatarId ).toBe( 'cropped-avatar' );
+        const photo = uploadedPhoto! as Buffer;
+        expect( photo.readUInt32BE( 16 ) ).toBe( 512 );
+        expect( photo.readUInt32BE( 20 ) ).toBe( 512 );
+        const centerPixel = await page.evaluate( async base64 =>
+        {
+            const image = new Image();
+            image.src = `data:image/png;base64,${ base64 }`;
+            await image.decode();
+            const canvas = document.createElement( 'canvas' );
+            canvas.width = 512;
+            canvas.height = 512;
+            const context = canvas.getContext( '2d' )!;
+            context.drawImage( image, 0, 0 );
+            return Array.from( context.getImageData( 64, 256, 1, 1 ).data );
+        }, photo.toString( 'base64' ) );
+        expect( centerPixel ).toEqual( [ 0, 0, 255, 255 ] );
+    } );
+}
+
 test( 'login, software tags and assignee filters', async ( { page } ) =>
 {
     await installApiMock( page, false );
