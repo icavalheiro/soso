@@ -5,7 +5,7 @@ export function fixture (): { account: Account; data: BoardData; }
 {
     const account: Account = { id: 'admin-fixture', name: 'Maya Chen', email: 'maya@example.test', isAdmin: true, disabled: false, avatarId: null, theme: 'light', settings: '' };
     const data: BoardData = {
-        board: { id: 'board-fixture', name: 'Soso development', description: 'Sprint 01', icon: 'columns', ownerId: account.id, members: [ 'sam-fixture' ], revision: 0, columns: [ { id: 'todo', name: 'To do', isDone: false }, { id: 'progress', name: 'In progress', isDone: false }, { id: 'done', name: 'Done', isDone: true } ] },
+        board: { id: 'board-fixture', name: 'Soso development', description: 'Sprint 01', icon: 'columns', color: 'teal', ownerId: account.id, members: [ 'sam-fixture' ], revision: 0, columns: [ { id: 'todo', name: 'To do', isDone: false }, { id: 'progress', name: 'In progress', isDone: false }, { id: 'done', name: 'Done', isDone: true } ] },
         members: [ account, { id: 'sam-fixture', name: 'Sam Rivers', avatarId: null } ], tickets: [],
     };
     const entries = [

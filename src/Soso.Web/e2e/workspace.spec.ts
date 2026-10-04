@@ -33,24 +33,74 @@ test( 'create and edit board icons persist after reload', async ( { page }, test
     await page.getByRole( 'textbox', { name: /^Name/ } ).fill( 'Personal plans' );
     await page.getByRole( 'button', { name: 'Board icon: Travel', exact: true } ).click();
     await expect( page.getByRole( 'button', { name: 'Board icon: Travel', exact: true } ) ).toHaveAttribute( 'aria-pressed', 'true' );
+    await page.getByRole( 'button', { name: 'Board color: Blue', exact: true } ).click();
+    await expect( page.getByRole( 'button', { name: 'Board color: Blue', exact: true } ) ).toHaveAttribute( 'aria-pressed', 'true' );
     await page.screenshot( { path: testInfo.outputPath( 'board-icon-picker.png' ) } );
     await page.getByRole( 'button', { name: 'Save board', exact: true } ).click();
     await expect( page.getByRole( 'heading', { name: 'Personal plans', exact: true } ) ).toBeVisible();
     expect( state.data.board.icon ).toBe( 'plane' );
+    expect( state.data.board.color ).toBe( 'blue' );
     await expect( page.locator( '.board-nav .active .lucide-plane' ) ).toBeVisible();
     await page.getByRole( 'button', { name: 'Board settings', exact: true } ).click();
     await expect( page.getByRole( 'button', { name: 'Board icon: Travel', exact: true } ) ).toHaveAttribute( 'aria-pressed', 'true' );
+    await expect( page.getByRole( 'button', { name: 'Board color: Blue', exact: true } ) ).toHaveAttribute( 'aria-pressed', 'true' );
     await page.getByRole( 'button', { name: 'Board icon: Goals', exact: true } ).click();
+    await page.getByRole( 'button', { name: 'Board color: Pink', exact: true } ).click();
     await page.getByRole( 'button', { name: 'Save board', exact: true } ).click();
     await expect( page.getByRole( 'dialog' ) ).toHaveCount( 0 );
     expect( state.data.board.icon ).toBe( 'target' );
+    expect( state.data.board.color ).toBe( 'pink' );
     await page.reload();
     await expect( page.locator( '.board-nav .active .lucide-target' ) ).toBeVisible();
     await expect( page.locator( '.topbar-title .lucide-target' ) ).toBeVisible();
+    await expect( page.locator( '.topbar-title .lucide-target' ) ).toHaveCSS( 'stroke', 'rgb(214, 51, 108)' );
+    await expect( page.locator( '.board-nav .active .lucide-target' ) ).toHaveCSS( 'stroke', 'rgb(214, 51, 108)' );
+    await page.getByRole( 'button', { name: 'Dark theme', exact: true } ).click();
+    await expect( page.locator( '.topbar-title .lucide-target' ) ).toHaveCSS( 'stroke', 'rgb(247, 131, 172)' );
+    await expect( page.locator( '.board-nav .active .lucide-target' ) ).toHaveCSS( 'stroke', 'rgb(247, 131, 172)' );
+    await page.getByRole( 'button', { name: 'Board settings', exact: true } ).click();
+    await expect( page.getByRole( 'button', { name: 'Board color: Pink', exact: true } ) ).toHaveAttribute( 'aria-pressed', 'true' );
+    await expect( page.getByRole( 'button', { name: 'Board icon: Goals', exact: true } ).locator( 'svg' ) ).toHaveCSS( 'stroke', 'rgb(247, 131, 172)' );
+    await page.screenshot( { path: testInfo.outputPath( 'board-color-dark.png' ) } );
 } );
 
 for ( const width of [ 1366, 390 ] )
 {
+    test( `board color palette in both themes at ${ width }px`, async ( { page }, testInfo ) =>
+    {
+        await page.setViewportSize( { width, height: 900 } );
+        const state = await installApiMock( page );
+        await page.goto( '/' );
+        const strokes: string[] = [];
+        for ( const scheme of [ 'light', 'dark' ] )
+        {
+            if ( scheme === 'dark' )
+            {
+                await page.getByRole( 'button', { name: 'Dark theme', exact: true } ).click();
+            }
+            await page.getByRole( 'button', { name: 'Board settings', exact: true } ).click();
+            for ( const color of [ 'Teal', 'Blue', 'Cyan', 'Green', 'Purple', 'Pink', 'Orange', 'Gray' ] )
+            {
+                const swatch = page.getByRole( 'button', { name: `Board color: ${ color }`, exact: true } );
+                await swatch.click();
+                await expect( swatch ).toHaveAttribute( 'aria-pressed', 'true' );
+                await expect( page.locator( '.board-color-picker [aria-pressed="true"]' ) ).toHaveCount( 1 );
+            }
+            await page.getByRole( 'button', { name: 'Board color: Orange', exact: true } ).click();
+            const stroke = await page.getByRole( 'button', { name: 'Board icon: Columns', exact: true } ).locator( 'svg' ).evaluate( icon => getComputedStyle( icon ).stroke );
+            strokes.push( stroke );
+            const paletteFits = await page.locator( '.board-color-picker' ).evaluate( palette => palette.scrollWidth <= palette.clientWidth );
+            expect( paletteFits ).toBeTruthy();
+            await page.mouse.move( 0, 0 );
+            await page.screenshot( { path: testInfo.outputPath( `board-palette-${ scheme }.png` ) } );
+            await page.getByRole( 'button', { name: 'Save board', exact: true } ).click();
+            await expect( page.getByRole( 'dialog' ) ).toHaveCount( 0 );
+            expect( state.data.board.color ).toBe( 'orange' );
+            await expect( page.locator( '.topbar-title .lucide-columns-3' ) ).toHaveCSS( 'stroke', stroke );
+        }
+        expect( strokes[ 0 ] ).not.toBe( strokes[ 1 ] );
+    } );
+
     test( `sidebar collapse and persistence at ${ width }px`, async ( { page }, testInfo ) =>
     {
         await page.setViewportSize( { width, height: 900 } );

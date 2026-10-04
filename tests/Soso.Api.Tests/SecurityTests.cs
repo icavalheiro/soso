@@ -82,29 +82,37 @@ public sealed class SecurityTests
         await Login(client);
         var legacy = await CreateBoard(client, "Existing client");
         Assert.Equal("columns", legacy.Icon);
+        Assert.Equal("teal", legacy.Color);
 
-        using var created = await client.PostAsJsonAsync("/api/boards", new { name = "Projects", description = "", icon = "rocket" });
+        using var created = await client.PostAsJsonAsync("/api/boards", new { name = "Projects", description = "", icon = "rocket", color = "blue" });
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         var board = (await created.Content.ReadFromJsonAsync<Board>())!;
         Assert.Equal("rocket", board.Icon);
+        Assert.Equal("blue", board.Color);
         var columns = board.Columns.Select(column => new ColumnRequest(column.Id, column.Name, column.IsDone)).ToArray();
-        var edit = new UpdateBoardRequest(board.Name, board.Description, [], columns, board.Revision, "house");
+        var edit = new UpdateBoardRequest(board.Name, board.Description, [], columns, board.Revision, "house", "pink");
         using var updated = await client.PutAsJsonAsync($"/api/boards/{board.Id}", edit);
         Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
         board = (await updated.Content.ReadFromJsonAsync<Board>())!;
         Assert.Equal("house", board.Icon);
+        Assert.Equal("pink", board.Color);
 
         using var invalid = await client.PutAsJsonAsync($"/api/boards/{board.Id}", edit with { Icon = "unknown", Revision = board.Revision });
         Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+        using var invalidColor = await client.PutAsJsonAsync($"/api/boards/{board.Id}", edit with { Color = "unknown", Revision = board.Revision });
+        Assert.Equal(HttpStatusCode.BadRequest, invalidColor.StatusCode);
         using var stale = await client.PutAsJsonAsync($"/api/boards/{board.Id}", edit);
         Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
         using var oldClient = await client.PutAsJsonAsync($"/api/boards/{board.Id}", new { board.Name, board.Description, members = Array.Empty<string>(), columns, board.Revision });
         Assert.Equal(HttpStatusCode.OK, oldClient.StatusCode);
         var reloaded = (await client.GetFromJsonAsync<BoardResponse>($"/api/boards/{board.Id}"))!;
         Assert.Equal("house", reloaded.Board.Icon);
+        Assert.Equal("pink", reloaded.Board.Color);
         Assert.Equal(board.Revision + 1, reloaded.Board.Revision);
         using var invalidCreate = await client.PostAsJsonAsync("/api/boards", new { name = "Invalid icon", description = "", icon = "unknown" });
         Assert.Equal(HttpStatusCode.BadRequest, invalidCreate.StatusCode);
+        using var invalidColorCreate = await client.PostAsJsonAsync("/api/boards", new { name = "Invalid color", description = "", color = "unknown" });
+        Assert.Equal(HttpStatusCode.BadRequest, invalidColorCreate.StatusCode);
     }
 
     [Fact]

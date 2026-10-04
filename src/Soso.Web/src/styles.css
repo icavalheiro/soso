@@ -67,6 +67,16 @@ button:focus-visible {
     grid-template-columns: repeat(6, 36px);
     gap: 8px;
 }
+.board-icon-picker [aria-pressed="true"] {
+    outline: 2px solid currentColor;
+    outline-offset: -2px;
+}
+.board-color-picker {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, 32px);
+    max-width: 298px;
+    gap: 6px;
+}
 .sidebar {
     display: flex;
     flex-direction: column;
