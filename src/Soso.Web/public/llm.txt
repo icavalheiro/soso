@@ -125,6 +125,32 @@ update_ticket(boardId: string, ticketId: string, update: object)
   - archived: boolean; true archives, false restores.
   - revision: current ticket revision from get_board or a successful write result.
 
+### Ticket Tags
+
+Tags classify the kind of software work in a ticket. They do not represent
+priority, assignee, completion or archive state; use those separate properties.
+Choose the tags that match the requested work:
+
+- bug: correct a defect or behavior that does not work as intended.
+- feature: add a new capability or extend existing functionality.
+- design: UX/UI, interaction or visual design work.
+- docs: write or update documentation.
+- refactor: restructure code without intended changes to its behavior.
+- test: add or maintain automated tests or improve test coverage.
+- chore: routine maintenance, dependency updates, build setup or tooling.
+- research: investigate a problem, explore options or validate a technical idea.
+
+A ticket can have multiple tags, such as ["bug", "test"] for a fix with regression
+tests, or no tags. Only these eight lowercase values are supported; do not invent
+custom tags or use display labels as values. At most 8 entries may be supplied,
+and duplicates are removed when saved.
+
+Read current tags with get_board. create_ticket starts with no tags; apply them
+with update_ticket afterwards. update_ticket replaces the entire tags array,
+not just the tags being added or removed. Preserve unrelated existing tags and
+all other editable properties, and send [] only when intentionally clearing all
+tags. move_ticket preserves tags.
+
 Example arguments for update_ticket (replace IDs, revision and properties with
 real values read from your board; do not apply this example blindly):
 
