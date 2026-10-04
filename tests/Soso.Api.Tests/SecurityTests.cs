@@ -137,6 +137,10 @@ public sealed class SecurityTests
             var board = service.Create(new("Visible", ""), user);
             var tickets = tools.CreateTickets(board.Id, Enumerable.Range(0, 6).Select(index => new CreateTicketRequest(index == 0 ? "Needle title" : "Ticket " + index, board.Columns[0].Id)).ToArray());
             Assert.Equal(tickets[0].Id, Assert.Single(tools.SearchTickets("needle").Tickets).Id);
+            var byId = tools.SearchTickets(tickets[0].Id.ToUpperInvariant());
+            Assert.Equal(1, byId.Total);
+            Assert.Equal(tickets[0].Id, Assert.Single(byId.Tickets).Id);
+            Assert.Contains(tools.SearchTickets(tickets[0].Id[..8], board.Id).Tickets, ticket => ticket.Id == tickets[0].Id);
             tools.UpdateTicket(board.Id, tickets[1].Id, Edit(tickets[1]) with { Description = "Needle description" });
             tools.UpdateTicket(board.Id, tickets[2].Id, Edit(tickets[2]) with { Subtasks = [new("task", "Needle subtask", false)] });
             tools.AddComment(board.Id, tickets[3].Id, "Needle comment");
@@ -144,7 +148,10 @@ public sealed class SecurityTests
             tools.UpdateTicket(board.Id, tickets[5].Id, Edit(tickets[5], ["research"]));
             var privateUser = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "other")], "test"));
             var hidden = service.Create(new("Hidden", ""), privateUser);
-            service.CreateTicket(hidden.Id, new("Needle secret", hidden.Columns[0].Id), privateUser);
+            var hiddenTicket = service.CreateTicket(hidden.Id, new("Needle secret", hidden.Columns[0].Id), privateUser);
+            Assert.Empty(tools.SearchTickets(hiddenTicket.Id).Tickets);
+            Assert.Empty(tools.SearchTickets(tickets[4].Id).Tickets);
+            Assert.Equal(tickets[4].Id, Assert.Single(tools.SearchTickets(tickets[4].Id, includeArchived: true).Tickets).Id);
             var result = tools.SearchTickets("NEEDLE", limit: 2);
             Assert.Equal(4, result.Total);
             Assert.Equal(2, result.Tickets.Length);
@@ -170,14 +177,15 @@ public sealed class SecurityTests
         {
             var board = service.Create(new("Assigned", ""), user);
             var hidden = service.Create(new("Unassigned", ""), user);
-            service.CreateTicket(board.Id, new("Needle assigned", board.Columns[0].Id), user);
-            service.CreateTicket(hidden.Id, new("Needle hidden", hidden.Columns[0].Id), user);
+            var assignedTicket = service.CreateTicket(board.Id, new("Needle assigned", board.Columns[0].Id), user);
+            var unassignedTicket = service.CreateTicket(hidden.Id, new("Needle hidden", hidden.Columns[0].Id), user);
             var token = new AccessToken { Id = "token", UserId = "owner", ExpiresAt = DateTime.UtcNow.AddDays(1) };
             store.Tokens.Insert(token);
             var identity = new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "owner"), new Claim(ClaimTypes.Role, "admin"), new Claim(McpAuthentication.TokenClaim, token.Id)], "Mcp");
             accessor.HttpContext!.User = new ClaimsPrincipal(identity);
             Assert.Empty(tools.ListBoards());
             Assert.Empty(tools.SearchTickets("needle").Tickets);
+            Assert.Empty(tools.SearchTickets(assignedTicket.Id).Tickets);
             Assert.Equal(404, Assert.Throws<ApiException>(() => tools.GetBoard(board.Id)).Status);
             Assert.Equal(404, Assert.Throws<ApiException>(() => tools.CreateTickets(board.Id, [new("Denied", board.Columns[0].Id)])).Status);
             token.BoardIds = [board.Id];
@@ -185,6 +193,8 @@ public sealed class SecurityTests
             Assert.Equal(board.Id, Assert.Single(tools.ListBoards()).Id);
             Assert.Equal(board.Id, tools.GetBoard(board.Id).Board.Id);
             Assert.Single(tools.SearchTickets("needle").Tickets);
+            Assert.Equal(assignedTicket.Id, Assert.Single(tools.SearchTickets(assignedTicket.Id).Tickets).Id);
+            Assert.Empty(tools.SearchTickets(unassignedTicket.Id).Tickets);
             Assert.Equal(404, Assert.Throws<ApiException>(() => tools.GetBoard(hidden.Id)).Status);
             Assert.Equal(404, Assert.Throws<ApiException>(() => tools.SearchTickets("needle", hidden.Id)).Status);
             var created = tools.CreateTickets(board.Id, [new("Allowed", board.Columns[0].Id)]);
