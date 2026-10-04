@@ -1,0 +1,30 @@
+name: soso-local
+
+services:
+  soso:
+    build: .
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      LocalHttp: "true"
+      CloudflareTunnel: "false"
+      Bootstrap__Email: ${BOOTSTRAP_EMAIL:?Set BOOTSTRAP_EMAIL in .env}
+      Bootstrap__Password: ${BOOTSTRAP_PASSWORD:?Set a strong BOOTSTRAP_PASSWORD in .env}
+      Bootstrap__Name: ${BOOTSTRAP_NAME:-Local Administrator}
+      AllowedHosts: "localhost;127.0.0.1"
+      Logging__LogLevel__Default: Information
+    ports:
+      - "127.0.0.1:${SOSO_LOCAL_PORT:-8061}:8080"
+    volumes:
+      - soso-local-data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    cpus: 1.0
+
+volumes:
+  soso-local-data:

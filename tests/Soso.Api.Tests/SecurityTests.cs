@@ -75,6 +75,62 @@ public sealed class SecurityTests
     private static UpdateTicketRequest Edit(Ticket ticket, string[]? tags = null, bool archived = false) => new(ticket.Title, ticket.Description, ticket.ColumnId, ticket.Priority, ticket.AssigneeId, null, ticket.Position, [], tags ?? [], archived, ticket.Revision);
 
     [Fact]
+    public async Task LocalHttpDevelopmentSupportsLoginAndStillRequiresCsrf()
+    {
+        await using var factory = new AppFactory();
+        await using var local = factory.WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment("Development");
+            builder.UseSetting("LocalHttp", "true");
+        });
+        using var client = local.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("http://localhost"), AllowAutoRedirect = false });
+        using var csrfResponse = await client.GetAsync("/api/auth/csrf");
+        Assert.Equal(HttpStatusCode.OK, csrfResponse.StatusCode);
+        var csrfCookie = csrfResponse.Headers.GetValues("Set-Cookie").Single(value => value.StartsWith("soso-local-csrf=", StringComparison.Ordinal));
+        Assert.DoesNotContain("; secure", csrfCookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("; httponly", csrfCookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/auth/login", new { email = "admin@example.test", password = AppFactory.Password })).StatusCode);
+
+        var csrf = await csrfResponse.Content.ReadFromJsonAsync<JsonElement>();
+        client.DefaultRequestHeaders.Add("X-CSRF-TOKEN", csrf.GetProperty("token").GetString());
+        using var login = await client.PostAsJsonAsync("/api/auth/login", new { email = "admin@example.test", password = AppFactory.Password });
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        var sessionCookie = login.Headers.GetValues("Set-Cookie").Single(value => value.StartsWith("soso-local=", StringComparison.Ordinal));
+        Assert.DoesNotContain("; secure", sessionCookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("; httponly", sessionCookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("; samesite=strict", sessionCookie, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/auth/me")).StatusCode);
+        client.DefaultRequestHeaders.Remove("X-CSRF-TOKEN");
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync("/api/auth/logout", null)).StatusCode);
+    }
+
+    [Theory]
+    [InlineData("Production", true)]
+    [InlineData("Development", false)]
+    public async Task SecureCookiesRemainRequiredOutsideExplicitLocalHttp(string environment, bool localHttp)
+    {
+        await using var factory = new AppFactory();
+        await using var configured = factory.WithWebHostBuilder(builder =>
+        {
+            builder.UseEnvironment(environment);
+            builder.UseSetting("LocalHttp", localHttp.ToString());
+        });
+        using var client = configured.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost"), AllowAutoRedirect = false });
+        using var csrf = await client.GetAsync("/api/auth/csrf");
+        Assert.Equal(HttpStatusCode.OK, csrf.StatusCode);
+        var csrfCookie = csrf.Headers.GetValues("Set-Cookie").Single(value => value.StartsWith("__Host-soso-csrf=", StringComparison.Ordinal));
+        Assert.Contains("; secure", csrfCookie, StringComparison.OrdinalIgnoreCase);
+        await Login(client);
+
+        var isProduction = environment == "Production";
+        if (isProduction)
+        {
+            using var http = configured.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("http://localhost"), AllowAutoRedirect = false });
+            Assert.Equal(HttpStatusCode.BadRequest, (await http.GetAsync("/api/auth/csrf")).StatusCode);
+        }
+    }
+
+    [Fact]
     public async Task AnonymousAccessAndMissingCsrfAreRejected()
     {
         using var factory = new AppFactory();

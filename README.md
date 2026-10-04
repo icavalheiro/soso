@@ -30,6 +30,26 @@ Open https://localhost:7240. On Linux/macOS replace the `xcopy` command with `mk
 
 For frontend hot reload, run `npm --prefix src/Soso.Web run dev` alongside the API and open the Vite localhost URL. Its proxy targets the API at https://localhost:7240. Certificate verification is disabled **only in the development proxy**. Use the HTTPS API origin for testing secure-cookie behavior across browsers.
 
+## Local Docker Testing
+
+Set `BOOTSTRAP_EMAIL` and a strong `BOOTSTRAP_PASSWORD` of 14-128 characters in `.env`, using `.env.example` as a reference. No public domain, tunnel or TLS certificate is needed for this local-only configuration.
+
+```cmd
+docker compose -f docker-compose.local.yml up -d --build
+docker compose -f docker-compose.local.yml ps
+```
+
+Open http://localhost:8061. The local project and data volume are separate from production, and port 8061 avoids conflicting with the production origin on 8060. Set `SOSO_LOCAL_PORT` in `.env` to use another free port. Use this file by itself with `-f`, not as an override merged with `docker-compose.yml`.
+
+This configuration enables `LocalHttp=true` only in `Development`: session and CSRF cookies use local names and accept HTTP, while CSRF validation remains enabled. Production ignores this option and retains HTTPS-only `__Host-` cookies. The published port is bound exclusively to loopback. Do not expose this development configuration publicly. Bootstrap changes do not update an administrator already created in the local data volume.
+
+```cmd
+docker compose -f docker-compose.local.yml logs -f soso
+docker compose -f docker-compose.local.yml down
+```
+
+`down` preserves local data. Adding `--volumes` deletes the local database and keys; it does not affect the separate production volume.
+
 ## Production
 
 1. Configure your public hostname in Cloudflare Tunnel. Keep public HTTPS enabled at Cloudflare and enable Always Use HTTPS; no inbound public application ports are needed.

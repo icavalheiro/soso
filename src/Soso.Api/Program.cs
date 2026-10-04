@@ -1,5 +1,15 @@
-using System.Security.Claims;
 using System.Net;
+using System.Security.Claims;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
+using Soso.Api;
 
 if (args.Contains("--healthcheck"))
 {
@@ -21,6 +31,10 @@ if (args.Contains("--healthcheck"))
 }
 
 var builder = WebApplication.CreateBuilder(args);
+var isDevelopment = builder.Environment.IsDevelopment();
+var localHttpRequested = builder.Configuration.GetValue<bool>("LocalHttp");
+var allowLocalHttp = isDevelopment && localHttpRequested;
+var cookieSecurePolicy = allowLocalHttp ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.Always;
 var dataPath = builder.Configuration["DataPath"] ?? "data";
 Directory.CreateDirectory(dataPath);
 builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(dataPath, "keys")));
@@ -36,8 +50,8 @@ builder.Services.AddValidation();
 builder.Services.AddAntiforgery(options =>
 {
     options.HeaderName = "X-CSRF-TOKEN";
-    options.Cookie.Name = "__Host-soso-csrf";
-    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.Name = allowLocalHttp ? "soso-local-csrf" : "__Host-soso-csrf";
+    options.Cookie.SecurePolicy = cookieSecurePolicy;
     options.Cookie.SameSite = SameSiteMode.Strict;
 });
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -48,9 +62,9 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(options =>
 {
-    options.Cookie.Name = "__Host-soso";
+    options.Cookie.Name = allowLocalHttp ? "soso-local" : "__Host-soso";
     options.Cookie.HttpOnly = true;
-    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.SecurePolicy = cookieSecurePolicy;
     options.Cookie.SameSite = SameSiteMode.Strict;
     options.ExpireTimeSpan = TimeSpan.FromHours(12);
     options.SlidingExpiration = false;
