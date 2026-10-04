@@ -80,7 +80,7 @@ Bootstrap settings are only used when no active administrator exists. Rotate the
 
 ## MCP / LLM Clients
 
-The web application serves an LLM integration guide at `/llm.txt`, covering client configuration, permissions, tool arguments, revision handling and safe agent workflows. Its source is [src/Soso.Web/public/llm.txt](src/Soso.Web/public/llm.txt); Vite includes it in the frontend build and the application serves it as a public static asset.
+The web application serves an LLM integration guide at `/llms.txt`, covering client configuration, permissions, tool arguments, revision handling and safe agent workflows. Its source is [src/Soso.Web/public/llms.txt](src/Soso.Web/public/llms.txt); Vite includes it in the frontend build and the application serves it as a public static asset.
 
 Create a token in Profile & settings / MCP. Tokens are shown once, stored only as SHA-256 hashes, expire in 30 days and can be revoked immediately. Configure a client that supports **Streamable HTTP with custom bearer headers**:
 
@@ -96,7 +96,7 @@ Create a token in Profile & settings / MCP. Tokens are shown once, stored only a
 }
 ```
 
-The included `.vscode/mcp.json` prompts for the token without writing it into the repository. Change its URL for your deployment. Available tools: `list_boards`, `get_board`, `create_ticket`, `move_ticket`, `update_ticket`, `add_comment`. `update_ticket` supports tags, subtasks, archive state and other editable properties with revision checks. Tools use the caller's board permissions and cannot create accounts. Cookies are not accepted at MCP endpoints; bearer tokens are not accepted by browser API endpoints. This version does not implement OAuth discovery/registration, so clients requiring that flow need a compatible gateway. Treat board text and comments as untrusted context; require human approval for LLM writes.
+The included `.vscode/mcp.json` prompts for the token without writing it into the repository. Change its URL for your deployment. Available tools: `list_boards`, `get_board`, `create_ticket`, `create_tickets`, `move_ticket`, `update_ticket`, `update_tickets`, `add_comment`, `search_tickets`. `update_ticket` supports tags, subtasks, archive state and other editable properties with revision checks. Batch tools atomically insert or update 1 to 100 tickets in one board; a failed item rolls back the entire batch. `search_tickets` searches ticket text in accessible boards with pagination and optional archived results. Tools use the caller's board permissions and cannot create accounts. Cookies are not accepted at MCP endpoints; bearer tokens are not accepted by browser API endpoints. This version does not implement OAuth discovery/registration, so clients requiring that flow need a compatible gateway. Treat board text and comments as untrusted context; require human approval for LLM writes.
 
 ## Security And Validation
 

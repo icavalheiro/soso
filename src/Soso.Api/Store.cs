@@ -23,5 +23,28 @@ public sealed class Store : IDisposable
         Tokens.EnsureIndex(token => token.UserId);
     }
 
+    public T Transaction<T>(Func<T> operation)
+    {
+        lock (Gate)
+        {
+            var started = database.BeginTrans();
+            if (!started)
+            {
+                throw new InvalidOperationException("A transaction is already active.");
+            }
+            try
+            {
+                var result = operation();
+                database.Commit();
+                return result;
+            }
+            catch
+            {
+                database.Rollback();
+                throw;
+            }
+        }
+    }
+
     public void Dispose() => database.Dispose();
 }

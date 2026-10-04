@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.ComponentModel.DataAnnotations;
 
 namespace Soso.Api;
 
@@ -104,6 +105,7 @@ public sealed class BoardService(Store store)
     {
         lock (store.Gate)
         {
+            ValidateInput(request);
             var board = RequireBoard(boardId, user);
             CheckColumn(board, request.ColumnId);
             var position = store.Tickets.Find(ticket => ticket.BoardId == boardId).Select(ticket => ticket.Position).DefaultIfEmpty(0).Max() + 1024;
@@ -117,6 +119,11 @@ public sealed class BoardService(Store store)
     {
         lock (store.Gate)
         {
+            ValidateInput(request);
+            foreach (var task in request.Subtasks)
+            {
+                ValidateInput(task);
+            }
             var board = RequireBoard(boardId, user);
             var ticket = RequireTicket(boardId, ticketId, user);
             CheckRevision(ticket.Revision, request.Revision);
@@ -143,6 +150,81 @@ public sealed class BoardService(Store store)
             ticket.Revision++;
             store.Tickets.Update(ticket);
             return ticket;
+        }
+    }
+
+    public Ticket[] CreateTickets(string boardId, CreateTicketRequest[] tickets, ClaimsPrincipal user)
+    {
+        CheckBatch(tickets);
+        return store.Transaction(() =>
+        {
+            RequireBoard(boardId, user);
+            return tickets.Select(ticket => CreateTicket(boardId, ticket, user)).ToArray();
+        });
+    }
+
+    public Ticket[] UpdateTickets(string boardId, BatchTicketUpdateRequest[] tickets, ClaimsPrincipal user)
+    {
+        CheckBatch(tickets);
+        foreach (var ticket in tickets)
+        {
+            ValidateInput(ticket);
+        }
+        var uniqueTickets = tickets.Select(ticket => ticket.TicketId).Distinct().Count() == tickets.Length;
+        if (!uniqueTickets)
+        {
+            throw new ApiException(400, "Batch ticket IDs must be unique.");
+        }
+        return store.Transaction(() =>
+        {
+            RequireBoard(boardId, user);
+            return tickets.Select(ticket => UpdateTicket(boardId, ticket.TicketId, ticket.Update, user)).ToArray();
+        });
+    }
+
+    public TicketSearchResponse SearchTickets(string query, ClaimsPrincipal user, string? boardId = null, bool includeArchived = false, int offset = 0, int limit = 50)
+    {
+        var text = Text(query, 200);
+        var validPage = offset >= 0 && limit is >= 1 and <= 100;
+        if (!validPage)
+        {
+            throw new ApiException(400, "Offset must be nonnegative and limit between 1 and 100.");
+        }
+        lock (store.Gate)
+        {
+            var boardIds = boardId is null ? List(user).Select(board => board.Id).ToHashSet() : new HashSet<string> { RequireBoard(boardId, user).Id };
+            var matches = store.Tickets.FindAll()
+                .Where(ticket => boardIds.Contains(ticket.BoardId))
+                .Where(ticket => includeArchived || !ticket.Archived)
+                .Where(ticket => ticket.Title.Contains(text, StringComparison.OrdinalIgnoreCase)
+                    || ticket.Description.Contains(text, StringComparison.OrdinalIgnoreCase)
+                    || ticket.Tags.Any(tag => tag.Contains(text, StringComparison.OrdinalIgnoreCase))
+                    || ticket.Subtasks.Any(task => task.Title.Contains(text, StringComparison.OrdinalIgnoreCase))
+                    || ticket.Comments.Any(comment => comment.Text.Contains(text, StringComparison.OrdinalIgnoreCase)))
+                .OrderBy(ticket => ticket.BoardId, StringComparer.Ordinal)
+                .ThenBy(ticket => ticket.Position)
+                .ThenBy(ticket => ticket.Id, StringComparer.Ordinal)
+                .ToArray();
+            return new(matches.Skip(offset).Take(limit).ToArray(), matches.Length, offset, limit);
+        }
+    }
+
+    private static void CheckBatch<T>(T[]? tickets)
+    {
+        var validSize = tickets is { Length: >= 1 and <= 100 };
+        if (!validSize)
+        {
+            throw new ApiException(400, "A batch must contain between 1 and 100 tickets.");
+        }
+    }
+
+    private static void ValidateInput(object? input)
+    {
+        var errors = new List<ValidationResult>();
+        var valid = input is not null && Validator.TryValidateObject(input, new ValidationContext(input), errors, true);
+        if (!valid)
+        {
+            throw new ApiException(400, "Invalid ticket input.");
         }
     }
 

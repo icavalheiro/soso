@@ -27,6 +27,8 @@ public sealed record ColumnRequest([Required, MaxLength(32)] string Id, [Require
 public sealed record CreateTicketRequest([Required, MaxLength(160)] string Title, [Required, MaxLength(32)] string ColumnId);
 /// <summary>Editable ticket content with optimistic concurrency.</summary>
 public sealed record UpdateTicketRequest([Required, MaxLength(160)] string Title, [Required(AllowEmptyStrings = true), MaxLength(12000)] string Description, [Required, MaxLength(32)] string ColumnId, [Required, RegularExpression("^(low|normal|high|urgent)$")] string Priority, string? AssigneeId, DateTimeOffset? DueDate, double Position, [Required, MaxLength(100)] SubtaskRequest[] Subtasks, [Required, MaxLength(8)] string[] Tags, bool Archived, int Revision);
+public sealed record BatchTicketUpdateRequest([Required, MaxLength(32)] string TicketId, [Required] UpdateTicketRequest Update);
+public sealed record TicketSearchResponse(Ticket[] Tickets, int Total, int Offset, int Limit);
 /// <summary>Editable checklist entry.</summary>
 public sealed record SubtaskRequest([Required, MaxLength(32)] string Id, [Required, MaxLength(300)] string Title, bool Done);
 /// <summary>New ticket comment.</summary>
