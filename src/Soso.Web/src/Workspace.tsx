@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState, useDeferredValue } from 'react';
-import { ActionIcon, Avatar, Badge, Button, Group, Loader, Modal, PasswordInput, Select, Stack, Text, TextInput, Tooltip, useMantineColorScheme } from '@mantine/core';
+import { ActionIcon, Avatar, Badge, Button, Group, Loader, Modal, PasswordInput, Select, Stack, Text, TextInput, Tooltip, useComputedColorScheme, useMantineColorScheme } from '@mantine/core';
 import { Archive, Columns3, Plus, Search, Settings, LogOut, Sun, Moon, PanelLeftClose, PanelLeftOpen, RefreshCw, Users, SlidersHorizontal } from 'lucide-react';
 import { api, ApiError, refreshCsrf, imageUrl, ticketBody, tags } from './api';
 import type { Account, Board, BoardData, Ticket } from './api';
@@ -47,7 +47,8 @@ export default function Workspace ()
     const [ title, setTitle ] = useState( '' );
     const [ busy, setBusy ] = useState( false );
     const [ boardLoading, setBoardLoading ] = useState( false );
-    const { colorScheme, setColorScheme } = useMantineColorScheme();
+    const { setColorScheme } = useMantineColorScheme();
+    const colorScheme = useComputedColorScheme( 'light', { getInitialValueInEffect: false } );
 
     useEffect( () =>
     {
@@ -210,13 +211,15 @@ export default function Workspace ()
         }
     }
 
+    const themeButton = <IconButton label={ colorScheme === 'dark' ? 'Light theme' : 'Dark theme' } onClick={ () => { void toggleTheme(); } }>{ colorScheme === 'dark' ? <Sun size={ 15 } /> : <Moon size={ 15 } /> }</IconButton>;
+
     if ( booting )
     {
         return <div className="loading-screen"><Loader color="teal" /></div>;
     }
     if ( !account )
     {
-        return <Login onLogin={ setAccount } />;
+        return <Login onLogin={ setAccount } themeButton={ themeButton } />;
     }
     const canManage = data?.board.ownerId === account.id || account.isAdmin;
     const filtered = data?.tickets.filter( ticket =>
@@ -246,7 +249,7 @@ export default function Workspace ()
                 <Group gap={ 4 } wrap="nowrap" className="topbar-actions">
                     { data && <TextInput className="topbar-search" aria-label="Search tickets" placeholder="Search cards..." leftSection={ <Search size={ 14 } /> } size="xs" value={ search } onChange={ event => { setSearch( event.currentTarget.value ); } } /> }
                     <IconButton label="Refresh board" onClick={ () => { void reload(); } }>{ boardLoading ? <Loader size={ 14 } /> : <RefreshCw size={ 15 } /> }</IconButton>
-                    <IconButton label={ colorScheme === 'dark' ? 'Light theme' : 'Dark theme' } onClick={ () => { void toggleTheme(); } }>{ colorScheme === 'dark' ? <Sun size={ 15 } /> : <Moon size={ 15 } /> }</IconButton>
+                    { themeButton }
                     <IconButton label="Sign out" onClick={ () => { void api( '/auth/logout', 'POST' ).then( () => { setAccount( null ); setData( null ); setBoards( [] ); } ).catch( reportError ); } }><LogOut size={ 15 } /></IconButton>
                 </Group>
             </header>
@@ -281,7 +284,7 @@ export default function Workspace ()
     </div>;
 }
 
-function Login ( { onLogin }: { onLogin: ( account: Account ) => void; } )
+function Login ( { onLogin, themeButton }: { onLogin: ( account: Account ) => void; themeButton: React.ReactNode; } )
 {
     const [ email, setEmail ] = useState( '' );
     const [ password, setPassword ] = useState( '' );
@@ -306,5 +309,5 @@ function Login ( { onLogin }: { onLogin: ( account: Account ) => void; } )
             setBusy( false );
         }
     }
-    return <main className="login-page"><div className="login-brand"><img src="/logo.jpg" alt="Sosô" /><h1>Sosô</h1></div><form className="login-form" onSubmit={ event => { void submit( event ); } }><h2>Sign in</h2><Stack gap="md"><TextInput label="Email" type="email" autoComplete="username" required maxLength={ 254 } value={ email } onChange={ event => { setEmail( event.currentTarget.value ); } } /><PasswordInput label="Password" autoComplete="current-password" required maxLength={ 128 } value={ password } onChange={ event => { setPassword( event.currentTarget.value ); } } />{ error && <Text role="alert" c="red" size="sm">{ error }</Text> }<Button type="submit" loading={ busy }>Sign in</Button></Stack></form></main>;
+    return <main className="login-page"><div className="login-brand"><img src="/logo.jpg" alt="Sosô" /><h1>Sosô</h1>{ themeButton }</div><form className="login-form" onSubmit={ event => { void submit( event ); } }><h2>Sign in</h2><Stack gap="md"><TextInput label="Email" type="email" autoComplete="username" required maxLength={ 254 } value={ email } onChange={ event => { setEmail( event.currentTarget.value ); } } /><PasswordInput label="Password" autoComplete="current-password" required maxLength={ 128 } value={ password } onChange={ event => { setPassword( event.currentTarget.value ); } } />{ error && <Text role="alert" c="red" size="sm">{ error }</Text> }<Button type="submit" loading={ busy }>Sign in</Button></Stack></form></main>;
 }

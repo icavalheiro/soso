@@ -3,6 +3,50 @@ import { installApiMock } from './fixtures';
 
 for ( const width of [ 1366, 390 ] )
 {
+    for ( const systemTheme of [ 'light', 'dark' ] as const )
+    {
+        test( `login theme follows ${ systemTheme } system preference at ${ width }px`, async ( { page }, testInfo ) =>
+        {
+            await page.setViewportSize( { width, height: 900 } );
+            await page.emulateMedia( { colorScheme: systemTheme } );
+            const state = await installApiMock( page, false );
+            const profileUpdates: string[] = [];
+            page.on( 'request', request =>
+            {
+                const isProfileUpdate = request.method() === 'PUT' && request.url().endsWith( '/auth/profile' );
+                if ( isProfileUpdate )
+                {
+                    profileUpdates.push( request.url() );
+                }
+            } );
+            await page.goto( '/' );
+            const root = page.locator( 'html' );
+            const oppositeTheme = systemTheme === 'dark' ? 'light' : 'dark';
+            await expect( root ).toHaveAttribute( 'data-mantine-color-scheme', systemTheme );
+            await expect( page.getByRole( 'button', { name: systemTheme === 'dark' ? 'Light theme' : 'Dark theme', exact: true } ) ).toBeVisible();
+            await page.emulateMedia( { colorScheme: oppositeTheme } );
+            await expect( root ).toHaveAttribute( 'data-mantine-color-scheme', oppositeTheme );
+            await page.getByRole( 'button', { name: oppositeTheme === 'dark' ? 'Light theme' : 'Dark theme', exact: true } ).click();
+            await expect( root ).toHaveAttribute( 'data-mantine-color-scheme', systemTheme );
+            await page.reload();
+            await expect( root ).toHaveAttribute( 'data-mantine-color-scheme', systemTheme );
+            await page.getByRole( 'button', { name: systemTheme === 'dark' ? 'Light theme' : 'Dark theme', exact: true } ).click();
+            await expect( root ).toHaveAttribute( 'data-mantine-color-scheme', oppositeTheme );
+            expect( profileUpdates ).toHaveLength( 0 );
+            await page.screenshot( { path: testInfo.outputPath( 'login-theme.png' ) } );
+            expect( await page.locator( '.login-page' ).evaluate( element => element.scrollWidth <= element.clientWidth ) ).toBeTruthy();
+            state.account.theme = systemTheme;
+            await page.getByLabel( 'Email' ).fill( state.account.email );
+            await page.getByRole( 'textbox', { name: /^Password/ } ).fill( 'Test-only-browser-password!' );
+            await page.getByRole( 'button', { name: 'Sign in', exact: true } ).click();
+            await expect( page.locator( '.app-shell' ) ).toBeVisible();
+            await expect( root ).toHaveAttribute( 'data-mantine-color-scheme', systemTheme );
+        } );
+    }
+}
+
+for ( const width of [ 1366, 390 ] )
+{
     test( `MCP token board assignments at ${ width }px`, async ( { page }, testInfo ) =>
     {
         await page.setViewportSize( { width, height: 900 } );
