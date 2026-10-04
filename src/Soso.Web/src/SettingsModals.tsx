@@ -9,7 +9,7 @@ export function ProfileModal ( { account, onChange, onClose }: { account: Accoun
 {
     const [ name, setName ] = useState( account.name );
     const [ theme, setTheme ] = useState( account.theme );
-    const [ settings, setSettings ] = useState( account.settings );
+    const [ settings, setSettings ] = useState( account.settings ?? '' );
     const [ currentPassword, setCurrentPassword ] = useState( '' );
     const [ newPassword, setNewPassword ] = useState( '' );
     const [ tokens, setTokens ] = useState<Token[]>( [] );

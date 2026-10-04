@@ -20,6 +20,51 @@ test( 'login, software tags and assignee filters', async ( { page } ) =>
     await expect( page.locator( '.ticket' ) ).toHaveCount( 1 );
 } );
 
+for ( const preferences of [ undefined, null ] )
+{
+    const label = preferences === null ? 'null' : 'missing';
+    test( `password-rotation and theme change with ${ label } settings`, async ( { page } ) =>
+    {
+        const state = await installApiMock( page );
+        let pageLoads = 0;
+        page.on( 'load', () => { pageLoads++; } );
+        await page.goto( '/' );
+        await page.getByRole( 'button', { name: 'Profile & settings', exact: true } ).click();
+        await page.getByRole( 'tab', { name: 'Security', exact: true } ).click();
+        await page.getByRole( 'textbox', { name: /^Current password/ } ).fill( 'Test-only-browser-password!' );
+        await page.getByRole( 'textbox', { name: /^New password/ } ).fill( 'Changed-test-password-2026!' );
+        await page.getByRole( 'button', { name: 'Change password', exact: true } ).click();
+        await expect( page.getByRole( 'button', { name: 'Sign in', exact: true } ) ).toBeVisible();
+
+        Reflect.set( state.account, 'settings', preferences );
+        await page.getByLabel( 'Email' ).fill( 'maya@example.test' );
+        await page.getByRole( 'textbox', { name: /^Password/ } ).fill( 'Changed-test-password-2026!' );
+        await page.getByRole( 'button', { name: 'Sign in', exact: true } ).click();
+        await page.getByRole( 'button', { name: 'Profile & settings', exact: true } ).click();
+        await expect( page.getByLabel( 'Custom settings', { exact: true } ) ).toHaveValue( '' );
+        const profileResponse = page.waitForResponse( '**/api/auth/profile' );
+        await page.getByRole( 'button', { name: 'Save profile', exact: true } ).click();
+        const savedProfile = await profileResponse;
+        expect( savedProfile.request().postDataJSON().settings ).toBe( '' );
+        expect( savedProfile.status() ).toBe( 200 );
+        await expect( page.getByRole( 'dialog' ) ).toHaveCount( 0 );
+
+        Reflect.set( state.account, 'settings', preferences );
+        await page.getByRole( 'button', { name: 'Sign out', exact: true } ).click();
+        await page.getByLabel( 'Email' ).fill( 'maya@example.test' );
+        await page.getByRole( 'textbox', { name: /^Password/ } ).fill( 'Changed-test-password-2026!' );
+        await page.getByRole( 'button', { name: 'Sign in', exact: true } ).click();
+        const themeResponse = page.waitForResponse( '**/api/auth/profile' );
+        await page.getByRole( 'button', { name: 'Dark theme', exact: true } ).click();
+        const savedTheme = await themeResponse;
+        expect( savedTheme.request().postDataJSON().settings ).toBe( '' );
+        expect( savedTheme.status() ).toBe( 200 );
+        await expect( page.locator( 'html' ) ).toHaveAttribute( 'data-mantine-color-scheme', 'dark' );
+        await expect( page.getByText( 'The Settings field is required.', { exact: true } ) ).toHaveCount( 0 );
+        expect( pageLoads ).toBe( 1 );
+    } );
+}
+
 test( 'drag lift animation and cross-column move', async ( { page }, testInfo ) =>
 {
     const state = await installApiMock( page );

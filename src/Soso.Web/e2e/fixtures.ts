@@ -50,8 +50,24 @@ export async function installApiMock ( page: Page, authenticated = true )
         }
         if ( path === '/api/auth/profile' )
         {
-            Object.assign( state.account, request.postDataJSON() );
+            const input = request.postDataJSON();
+            const hasSettings = typeof input.settings === 'string';
+            if ( !hasSettings )
+            {
+                return reply( { errors: { Settings: [ 'The Settings field is required.' ] } }, 400 );
+            }
+            Object.assign( state.account, input );
             return reply( state.account );
+        }
+        if ( path === '/api/auth/password' )
+        {
+            loggedIn = false;
+            return route.fulfill( { status: 204 } );
+        }
+        if ( path === '/api/auth/logout' )
+        {
+            loggedIn = false;
+            return route.fulfill( { status: 204 } );
         }
         if ( path === '/api/auth/tokens' )
         {

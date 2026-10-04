@@ -80,6 +80,8 @@ Bootstrap settings are only used when no active administrator exists. Rotate the
 
 ## MCP / LLM Clients
 
+The web application serves an LLM integration guide at `/llm.txt`, covering client configuration, permissions, tool arguments, revision handling and safe agent workflows. Its source is [src/Soso.Web/public/llm.txt](src/Soso.Web/public/llm.txt); Vite includes it in the frontend build and the application serves it as a public static asset.
+
 Create a token in Profile & settings / MCP. Tokens are shown once, stored only as SHA-256 hashes, expire in 30 days and can be revoked immediately. Configure a client that supports **Streamable HTTP with custom bearer headers**:
 
 ```json

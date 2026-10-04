@@ -184,7 +184,7 @@ export default function Workspace ()
         }
         try
         {
-            setAccount( await api<Account>( '/auth/profile', 'PUT', { name: account.name, settings: account.settings, theme: next } ) );
+            setAccount( await api<Account>( '/auth/profile', 'PUT', { name: account.name, settings: account.settings ?? '', theme: next } ) );
         }
         catch ( error )
         {
