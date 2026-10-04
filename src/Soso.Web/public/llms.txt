@@ -106,10 +106,10 @@ add_comment(boardId: string, ticketId: string, text: string)
   ticket. No revision argument, but adding a comment increments ticket revision.
 
 update_ticket(boardId: string, ticketId: string, update: object)
-  Replaces the editable ticket properties and returns the updated ticket.
-  This is NOT a partial patch: copy current properties from get_board, change only
-  the intended fields and send the complete update object. Missing fields can
-  cause validation failures or unintended resets. The update properties are:
+  Replaces the editable ticket properties and returns the updated ticket. This is
+  NOT a partial patch: copy current properties from get_board, change only the
+  intended fields and send the complete update object. Missing fields can cause
+  validation failures or unintended resets. The update properties are:
   - title: nonblank string, at most 160 characters.
   - description: string, at most 12000 characters; empty string is allowed.
   - columnId: an existing column ID in this board.
