@@ -11,7 +11,7 @@ test( 'login, software tags and assignee filters', async ( { page } ) =>
     await page.getByLabel( 'Email' ).fill( 'maya@example.test' );
     await page.getByRole( 'textbox', { name: /^Password/ } ).fill( 'Test-only-browser-password!' );
     await page.getByRole( 'button', { name: 'Sign in', exact: true } ).click();
-    await expect( page.locator( '.brand strong' ) ).toHaveText( 'Sosôworkspace' );
+    await expect( page.locator( '.brand strong' ) ).toHaveText( 'SosôOrganizando tua vida :D' );
     await expect( page.locator( '.workspace-label' ) ).toHaveText( 'Sosô' );
     await expect( page.locator( '.ticket' ) ).toHaveCount( 4 );
     await page.getByRole( 'button', { name: 'Bug', exact: true } ).click();
@@ -24,6 +24,62 @@ test( 'login, software tags and assignee filters', async ( { page } ) =>
     await page.getByLabel( 'Search tickets' ).fill( 'sprint' );
     await expect( page.locator( '.ticket' ) ).toHaveCount( 1 );
 } );
+
+test( 'create and edit board icons persist after reload', async ( { page }, testInfo ) =>
+{
+    const state = await installApiMock( page );
+    await page.goto( '/' );
+    await page.getByRole( 'button', { name: 'Create board', exact: true } ).click();
+    await page.getByRole( 'textbox', { name: /^Name/ } ).fill( 'Personal plans' );
+    await page.getByRole( 'button', { name: 'Board icon: Travel', exact: true } ).click();
+    await expect( page.getByRole( 'button', { name: 'Board icon: Travel', exact: true } ) ).toHaveAttribute( 'aria-pressed', 'true' );
+    await page.screenshot( { path: testInfo.outputPath( 'board-icon-picker.png' ) } );
+    await page.getByRole( 'button', { name: 'Save board', exact: true } ).click();
+    await expect( page.getByRole( 'heading', { name: 'Personal plans', exact: true } ) ).toBeVisible();
+    expect( state.data.board.icon ).toBe( 'plane' );
+    await expect( page.locator( '.board-nav .active .lucide-plane' ) ).toBeVisible();
+    await page.getByRole( 'button', { name: 'Board settings', exact: true } ).click();
+    await expect( page.getByRole( 'button', { name: 'Board icon: Travel', exact: true } ) ).toHaveAttribute( 'aria-pressed', 'true' );
+    await page.getByRole( 'button', { name: 'Board icon: Goals', exact: true } ).click();
+    await page.getByRole( 'button', { name: 'Save board', exact: true } ).click();
+    await expect( page.getByRole( 'dialog' ) ).toHaveCount( 0 );
+    expect( state.data.board.icon ).toBe( 'target' );
+    await page.reload();
+    await expect( page.locator( '.board-nav .active .lucide-target' ) ).toBeVisible();
+    await expect( page.locator( '.topbar-title .lucide-target' ) ).toBeVisible();
+} );
+
+for ( const width of [ 1366, 390 ] )
+{
+    test( `sidebar collapse and persistence at ${ width }px`, async ( { page }, testInfo ) =>
+    {
+        await page.setViewportSize( { width, height: 900 } );
+        await installApiMock( page );
+        await page.goto( '/' );
+        if ( width < 768 )
+        {
+            await expect( page.locator( '.sidebar' ) ).toBeHidden();
+            await page.getByRole( 'button', { name: 'Expand sidebar', exact: true } ).click();
+        }
+        await expect( page.locator( '.brand span' ) ).toHaveText( 'Organizando tua vida :D' );
+        await expect( page.locator( '.sidebar' ) ).toBeVisible();
+        await page.screenshot( { path: testInfo.outputPath( 'sidebar-expanded.png' ) } );
+        await page.getByRole( 'button', { name: 'Collapse sidebar', exact: true } ).click();
+        await expect( page.locator( '.sidebar' ) ).toBeHidden();
+        await expect( page.getByRole( 'button', { name: 'Expand sidebar', exact: true } ) ).toHaveAttribute( 'aria-expanded', 'false' );
+        const workspace = await page.locator( '.workspace' ).boundingBox();
+        expect( workspace!.x ).toBe( 0 );
+        expect( workspace!.width ).toBe( width );
+        await page.screenshot( { path: testInfo.outputPath( 'sidebar-collapsed.png' ) } );
+        await page.reload();
+        await expect( page.locator( '.sidebar' ) ).toBeHidden();
+        await page.getByRole( 'button', { name: 'Expand sidebar', exact: true } ).click();
+        await expect( page.locator( '.sidebar' ) ).toBeVisible();
+        await page.reload();
+        await expect( page.locator( '.sidebar' ) ).toBeVisible();
+        expect( await page.evaluate( () => document.documentElement.scrollWidth > window.innerWidth ) ).toBeFalsy();
+    } );
+}
 
 for ( const preferences of [ undefined, null ] )
 {
@@ -90,6 +146,54 @@ test( 'drag lift animation and cross-column move', async ( { page }, testInfo ) 
     await expect( target ).toContainText( 'Plan sprint goals' );
     expect( state.data.tickets.find( ticket => ticket.title === 'Plan sprint goals' )!.columnId ).toBe( 'progress' );
 } );
+
+for ( const width of [ 1366, 390 ] )
+{
+    test( `ticket description Markdown rendering and source editing at ${ width }px`, async ( { page }, testInfo ) =>
+    {
+        await page.setViewportSize( { width, height: 900 } );
+        const state = await installApiMock( page );
+        const source = '# Release notes\n\n**Important** and ~~obsolete~~ with [Docs](https://example.com).\n\n- [x] Tested\n- [ ] Pending\n\n| Item | Status |\n| --- | --- |\n| UI | Ready |\n\n```ts\nconst ready = true;\n```\n\n<script>window.markdownExecuted = true</script>\n\n[Unsafe](javascript:alert(1))';
+        state.data.tickets[ 0 ].description = source;
+        await page.goto( '/' );
+        const openTicket = page.getByRole( 'button', { name: 'Open ticket: Sketch the board layout', exact: true } );
+        await openTicket.click();
+        const rendered = page.locator( '.ticket-description-markdown' );
+        await expect( rendered.getByRole( 'heading', { name: 'Release notes', exact: true } ) ).toBeVisible();
+        await expect( rendered.locator( 'strong' ) ).toHaveText( 'Important' );
+        await expect( rendered.locator( 'del' ) ).toHaveText( 'obsolete' );
+        await expect( rendered.getByRole( 'link', { name: 'Docs', exact: true } ) ).toHaveAttribute( 'href', 'https://example.com' );
+        await expect( rendered.getByRole( 'table' ) ).toBeVisible();
+        await expect( rendered.locator( 'pre code' ) ).toContainText( 'const ready = true;' );
+        await expect( rendered.getByRole( 'checkbox' ).first() ).toBeChecked();
+        await expect( rendered.getByRole( 'checkbox' ).first() ).toBeDisabled();
+        await expect( rendered.locator( 'script' ) ).toHaveCount( 0 );
+        await expect( rendered.locator( 'a[href^="javascript:"]' ) ).toHaveCount( 0 );
+        await expect( page.getByRole( 'textbox', { name: 'Description', exact: true } ) ).toHaveCount( 0 );
+        const fits = await rendered.evaluate( element => element.getBoundingClientRect().right <= window.innerWidth );
+        expect( fits ).toBeTruthy();
+        await page.screenshot( { path: testInfo.outputPath( 'description-markdown.png' ) } );
+        await page.getByRole( 'button', { name: 'Edit description', exact: true } ).click();
+        const editor = page.getByRole( 'textbox', { name: 'Description', exact: true } );
+        await expect( editor ).toHaveValue( source );
+        const edited = '## Updated\n\nA **saved** description.';
+        await editor.fill( edited );
+        await page.getByRole( 'button', { name: 'Preview description', exact: true } ).click();
+        await expect( rendered.getByRole( 'heading', { name: 'Updated', exact: true } ) ).toBeVisible();
+        await page.getByRole( 'button', { name: 'Edit description', exact: true } ).click();
+        await expect( editor ).toHaveValue( edited );
+        await page.getByRole( 'button', { name: 'Save changes', exact: true } ).click();
+        await expect( page.getByRole( 'dialog' ) ).toHaveCount( 0 );
+        expect( state.data.tickets[ 0 ].description ).toBe( edited );
+        await page.reload();
+        await openTicket.click();
+        await expect( rendered.getByRole( 'heading', { name: 'Updated', exact: true } ) ).toBeVisible();
+        await page.getByRole( 'button', { name: 'Edit description', exact: true } ).click();
+        await editor.fill( '' );
+        await page.getByRole( 'button', { name: 'Preview description', exact: true } ).click();
+        await expect( rendered ).toHaveText( 'No description' );
+    } );
+}
 
 test( 'ticket subtasks, comments and images', async ( { page } ) =>
 {

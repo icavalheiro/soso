@@ -4,6 +4,7 @@ import { Archive, Columns3, Plus, Search, Settings, LogOut, Sun, Moon, PanelLeft
 import { api, ApiError, refreshCsrf, imageUrl, ticketBody, tags } from './api';
 import type { Account, Board, BoardData, Ticket } from './api';
 import { reportError } from './feedback';
+import { BoardIcon } from './BoardIcon';
 const Kanban = lazy( () => import( './Kanban' ).then( module => ( { default: module.Kanban } ) ) );
 const TicketModal = lazy( () => import( './TicketModal' ).then( module => ( { default: module.TicketModal } ) ) );
 const BoardModal = lazy( () => import( './BoardModal' ).then( module => ( { default: module.BoardModal } ) ) );
@@ -11,9 +12,9 @@ const ProfileModal = lazy( () => import( './SettingsModals' ).then( module => ( 
 const AdminModal = lazy( () => import( './SettingsModals' ).then( module => ( { default: module.AdminModal } ) ) );
 const ArchiveModal = lazy( () => import( './ArchiveModal' ).then( module => ( { default: module.ArchiveModal } ) ) );
 
-function IconButton ( { label, children, onClick }: { label: string; children: React.ReactNode; onClick: () => void; } )
+function IconButton ( { label, children, onClick, expanded, controls }: { label: string; children: React.ReactNode; onClick: () => void; expanded?: boolean; controls?: string; } )
 {
-    return <Tooltip label={ label }><ActionIcon aria-label={ label } variant="subtle" color="gray" size="lg" onClick={ onClick }>{ children }</ActionIcon></Tooltip>;
+    return <Tooltip label={ label }><ActionIcon aria-label={ label } aria-expanded={ expanded } aria-controls={ controls } variant="subtle" color="gray" size="lg" onClick={ onClick }>{ children }</ActionIcon></Tooltip>;
 }
 
 export default function Workspace ()
@@ -26,7 +27,11 @@ export default function Workspace ()
     const data = loadedData?.board.id === activeId ? loadedData : null;
     const accountId = account?.id;
     const accountTheme = account?.theme;
-    const [ collapsed, setCollapsed ] = useState( () => window.innerWidth < 768 );
+    const [ collapsed, setCollapsed ] = useState( () =>
+    {
+        const stored = localStorage.getItem( 'soso-sidebar-collapsed' );
+        return stored === null ? window.innerWidth < 768 : stored === 'true';
+    } );
     const [ search, setSearch ] = useState( '' );
     const query = useDeferredValue( search );
     const [ priority, setPriority ] = useState( 'all' );
@@ -111,9 +116,21 @@ export default function Workspace ()
         return () => { alive = false; };
     }, [ activeId, accountId ] );
 
+    function toggleSidebar ()
+    {
+        const next = !collapsed;
+        setCollapsed( next );
+        localStorage.setItem( 'soso-sidebar-collapsed', String( next ) );
+    }
+
     function selectBoard ( id: string )
     {
         setActiveId( id ); setSelected( null ); setSearch( '' ); setAssignee( 'all' ); setTagFilter( [] ); setArchive( false );
+        if ( window.innerWidth < 768 )
+        {
+            setCollapsed( true );
+            localStorage.setItem( 'soso-sidebar-collapsed', 'true' );
+        }
     }
 
     async function reload ()
@@ -211,10 +228,10 @@ export default function Workspace ()
     } ) ?? [];
 
     return <div className={ `app-shell ${ collapsed ? 'is-collapsed' : '' }` }>
-        <aside className="sidebar">
-            <div className="brand"><img src="/logo.jpg" alt="Sosô" /><strong>Sosô<span>workspace</span></strong></div>
+        <aside className="sidebar" id="workspace-sidebar" aria-label="Workspace navigation">
+            <div className="brand"><img src="/logo.jpg" alt="Sosô" /><strong>Sosô<span>Organizando tua vida :D</span></strong></div>
             <div className="sidebar-heading"><span>BOARDS</span><IconButton label="Create board" onClick={ () => { setBoardModal( 'create' ); } }><Plus size={ 17 } /></IconButton></div>
-            <nav className="board-nav">{ boards.map( board => <Tooltip key={ board.id } label={ board.name } disabled={ !collapsed } position="right"><button className={ `board-link ${ board.id === activeId ? 'active' : '' }` } onClick={ () => { selectBoard( board.id ); } }><Columns3 size={ 18 } /><span>{ board.name }</span></button></Tooltip> ) }</nav>
+            <nav className="board-nav">{ boards.map( board => <button key={ board.id } className={ `board-link ${ board.id === activeId ? 'active' : '' }` } aria-current={ board.id === activeId ? 'page' : undefined } onClick={ () => { selectBoard( board.id ); } }><BoardIcon icon={ board.icon } /><span>{ board.name }</span></button> ) }</nav>
             <div className="sidebar-bottom">
                 { account.isAdmin && <button className="board-link" aria-label="Accounts" onClick={ () => { setAdmin( true ); } }><Users size={ 18 } /><span>Accounts</span></button> }
                 <button className="board-link" aria-label="Profile & settings" onClick={ () => { setProfile( true ); } }><Settings size={ 18 } /><span>Profile & settings</span></button>
@@ -222,7 +239,7 @@ export default function Workspace ()
             </div>
         </aside>
         <main className="workspace">
-            <header className="topbar"><Group gap={ 9 } wrap="nowrap" className="topbar-title"><IconButton label={ collapsed ? 'Expand sidebar' : 'Collapse sidebar' } onClick={ () => { setCollapsed( !collapsed ); } }>{ collapsed ? <PanelLeftOpen size={ 20 } /> : <PanelLeftClose size={ 20 } /> }</IconButton><span className="workspace-label">Sosô</span><span className="separator">/</span><Text size="sm" fw={ 600 } truncate>{ data?.board.name ?? 'Boards' }</Text></Group><Group gap={ 3 } wrap="nowrap"><IconButton label="Refresh board" onClick={ () => { void reload(); } }><RefreshCw size={ 18 } /></IconButton><IconButton label={ colorScheme === 'dark' ? 'Light theme' : 'Dark theme' } onClick={ () => { void toggleTheme(); } }>{ colorScheme === 'dark' ? <Sun size={ 18 } /> : <Moon size={ 18 } /> }</IconButton><IconButton label="Sign out" onClick={ () => { void api( '/auth/logout', 'POST' ).then( () => { setAccount( null ); setData( null ); setBoards( [] ); } ).catch( reportError ); } }><LogOut size={ 18 } /></IconButton></Group></header>
+            <header className="topbar"><Group gap={ 9 } wrap="nowrap" className="topbar-title"><IconButton label={ collapsed ? 'Expand sidebar' : 'Collapse sidebar' } onClick={ toggleSidebar } expanded={ !collapsed } controls="workspace-sidebar">{ collapsed ? <PanelLeftOpen size={ 20 } /> : <PanelLeftClose size={ 20 } /> }</IconButton><span className="workspace-label">Sosô</span><span className="separator">/</span>{ data && <BoardIcon icon={ data.board.icon } size={ 16 } /> }<Text size="sm" fw={ 600 } truncate>{ data?.board.name ?? 'Boards' }</Text></Group><Group gap={ 3 } wrap="nowrap"><IconButton label="Refresh board" onClick={ () => { void reload(); } }><RefreshCw size={ 18 } /></IconButton><IconButton label={ colorScheme === 'dark' ? 'Light theme' : 'Dark theme' } onClick={ () => { void toggleTheme(); } }>{ colorScheme === 'dark' ? <Sun size={ 18 } /> : <Moon size={ 18 } /> }</IconButton><IconButton label="Sign out" onClick={ () => { void api( '/auth/logout', 'POST' ).then( () => { setAccount( null ); setData( null ); setBoards( [] ); } ).catch( reportError ); } }><LogOut size={ 18 } /></IconButton></Group></header>
             { data ? <><section className="board-heading"><div className="board-title"><div className="eyebrow"><LayoutGrid size={ 13 } /> BOARD <span>{ data.tickets.length } tickets</span></div><h1>{ data.board.name }</h1>{ data.board.description && <p>{ data.board.description }</p> }</div><Group gap="sm" wrap="nowrap"><Avatar.Group className="board-avatars">{ data.members.slice( 0, 4 ).map( member => <Tooltip key={ member.id } label={ member.name }><Avatar size={ 30 } radius="xl" src={ imageUrl( member.avatarId ) }>{ member.name.slice( 0, 1 ) }</Avatar></Tooltip> ) }</Avatar.Group>{ canManage && <IconButton label="Board settings" onClick={ () => { setBoardModal( 'edit' ); } }><Settings size={ 19 } /></IconButton> }<Button size="xs" leftSection={ <Plus size={ 15 } /> } onClick={ () => { setNewColumn( data.board.columns[ 0 ].id ); } }>New ticket</Button></Group></section>
                 <section className="board-toolbar"><TextInput aria-label="Search tickets" placeholder="Search cards..." leftSection={ <Search size={ 15 } /> } size="xs" value={ search } onChange={ event => { setSearch( event.currentTarget.value ); } } /><div className="tag-filters">{ tags.map( tag => <button key={ tag.value } className={ `tag-filter ${ tagFilter.includes( tag.value ) ? 'selected' : '' }` } aria-pressed={ tagFilter.includes( tag.value ) } onClick={ () => { setTagFilter( previous => previous.includes( tag.value ) ? previous.filter( value => value !== tag.value ) : [ ...previous, tag.value ] ); } }><i style={ { background: tag.color } } />{ tag.label }</button> ) }</div><Select size="xs" aria-label="Filter by assignee" value={ assignee } onChange={ value => { setAssignee( value ?? 'all' ); } } data={ [ { label: 'All assignees', value: 'all' }, { label: 'Unassigned', value: 'unassigned' }, ...data.members.map( member => ( { value: member.id, label: member.name } ) ) ] } className="assignee-filter" allowDeselect={ false } /><Select size="xs" aria-label="Filter by priority" value={ priority } onChange={ value => { setPriority( value ?? 'all' ); } } data={ [ { label: 'All priorities', value: 'all' }, ...[ 'urgent', 'high', 'normal', 'low' ].map( value => ( { value, label: value[ 0 ].toUpperCase() + value.slice( 1 ) } ) ) ] } className="priority-filter" allowDeselect={ false } /><Button size="xs" variant="default" leftSection={ <Archive size={ 14 } /> } onClick={ () => { setArchive( true ); } }>Archive</Button><Badge variant="light" color="gray" size="sm">{ filtered.length }</Badge>{ boardLoading && <Loader size={ 15 } /> }</section>
                 <Suspense fallback={ <Loader m="xl" /> }><Kanban data={ data } tickets={ filtered } onOpen={ setSelected } onCreate={ setNewColumn } onMove={ move } /></Suspense></> : <div className="empty-workspace">{ boardLoading || activeId ? <Loader /> : <><Columns3 size={ 42 } strokeWidth={ 1.2 } /><h1>Your workspace, ready.</h1><Button leftSection={ <Plus size={ 17 } /> } onClick={ () => { setBoardModal( 'create' ); } }>Create a board</Button></> }</div> }

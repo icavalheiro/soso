@@ -54,7 +54,18 @@ button:focus-visible {
     overflow: hidden;
 }
 .app-shell.is-collapsed {
-    grid-template-columns: 64px minmax(0, 1fr);
+    grid-template-columns: 0 minmax(0, 1fr);
+}
+.app-shell.is-collapsed .sidebar {
+    display: none;
+}
+.workspace {
+    grid-column: 2;
+}
+.board-icon-picker {
+    display: grid;
+    grid-template-columns: repeat(6, 36px);
+    gap: 8px;
 }
 .sidebar {
     display: flex;
@@ -80,6 +91,7 @@ button:focus-visible {
 .brand strong {
     font-size: 23px;
     line-height: 1;
+    min-width: 0;
 }
 .brand span {
     display: block;
@@ -87,6 +99,7 @@ button:focus-visible {
     font-weight: 400;
     color: var(--muted);
     margin-top: 6px;
+    line-height: 1.35;
 }
 .sidebar-heading {
     display: flex;
@@ -652,6 +665,59 @@ button:focus-visible {
     border-left: 1px solid var(--line);
     padding-left: 20px;
 }
+.ticket-description-markdown {
+    font-size: 14px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+    min-width: 0;
+    max-height: 420px;
+    overflow: auto;
+}
+.ticket-description-markdown > :first-child {
+    margin-top: 0;
+}
+.ticket-description-markdown > :last-child {
+    margin-bottom: 0;
+}
+.ticket-description-markdown h1 {
+    font-size: 22px;
+}
+.ticket-description-markdown h2 {
+    font-size: 19px;
+}
+.ticket-description-markdown h3,
+.ticket-description-markdown h4,
+.ticket-description-markdown h5,
+.ticket-description-markdown h6 {
+    font-size: 16px;
+}
+.ticket-description-markdown a {
+    color: var(--mantine-color-anchor);
+}
+.ticket-description-markdown pre {
+    overflow: auto;
+    padding: 12px;
+    background: var(--column);
+    border-radius: 4px;
+}
+.ticket-description-markdown blockquote {
+    margin-left: 0;
+    padding-left: 14px;
+    border-left: 3px solid var(--line);
+    color: var(--muted);
+}
+.ticket-description-markdown img {
+    max-width: 100%;
+    height: auto;
+}
+.ticket-description-markdown table {
+    border-collapse: collapse;
+}
+.ticket-description-markdown th,
+.ticket-description-markdown td {
+    border: 1px solid var(--line);
+    padding: 6px 10px;
+}
 .inline-icon {
     vertical-align: -2px;
 }
@@ -723,20 +789,20 @@ button:focus-visible {
 }
 @media (max-width: 767px) {
     .app-shell {
-        grid-template-columns: 200px minmax(0, 1fr);
+        grid-template-columns: 224px minmax(0, 1fr);
     }
     .app-shell:not(.is-collapsed) .sidebar {
         position: fixed;
         inset: 54px auto 0 0;
         z-index: 10;
-        width: 200px;
+        width: 224px;
         box-shadow: 5px 0 18px #0002;
     }
     .app-shell:not(.is-collapsed) .workspace {
         grid-column: 1 / -1;
     }
     .app-shell.is-collapsed {
-        grid-template-columns: 52px minmax(0, 1fr);
+        grid-template-columns: 0 minmax(0, 1fr);
     }
     .sidebar {
         padding: 16px 8px 10px;

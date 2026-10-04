@@ -5,7 +5,7 @@ export function fixture (): { account: Account; data: BoardData; }
 {
     const account: Account = { id: 'admin-fixture', name: 'Maya Chen', email: 'maya@example.test', isAdmin: true, disabled: false, avatarId: null, theme: 'light', settings: '' };
     const data: BoardData = {
-        board: { id: 'board-fixture', name: 'Soso development', description: 'Sprint 01', ownerId: account.id, members: [ 'sam-fixture' ], revision: 0, columns: [ { id: 'todo', name: 'To do', isDone: false }, { id: 'progress', name: 'In progress', isDone: false }, { id: 'done', name: 'Done', isDone: true } ] },
+        board: { id: 'board-fixture', name: 'Soso development', description: 'Sprint 01', icon: 'columns', ownerId: account.id, members: [ 'sam-fixture' ], revision: 0, columns: [ { id: 'todo', name: 'To do', isDone: false }, { id: 'progress', name: 'In progress', isDone: false }, { id: 'done', name: 'Done', isDone: true } ] },
         members: [ account, { id: 'sam-fixture', name: 'Sam Rivers', avatarId: null } ], tickets: [],
     };
     const entries = [
@@ -90,10 +90,21 @@ export async function installApiMock ( page: Page, authenticated = true )
         }
         if ( path === '/api/boards' )
         {
+            if ( method === 'POST' )
+            {
+                Object.assign( state.data.board, request.postDataJSON(), { id: `board-${ sequence++ }`, revision: 0 } );
+                state.data.tickets = [];
+                return reply( state.data.board, 201 );
+            }
             return reply( [ state.data.board ] );
         }
         if ( path === `/api/boards/${ state.data.board.id }` )
         {
+            if ( method === 'PUT' )
+            {
+                Object.assign( state.data.board, request.postDataJSON(), { revision: state.data.board.revision + 1 } );
+                return reply( state.data.board );
+            }
             return reply( state.data );
         }
         if ( path.startsWith( '/api/images/' ) )

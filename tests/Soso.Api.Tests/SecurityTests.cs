@@ -75,6 +75,39 @@ public sealed class SecurityTests
     private static UpdateTicketRequest Edit(Ticket ticket, string[]? tags = null, bool archived = false) => new(ticket.Title, ticket.Description, ticket.ColumnId, ticket.Priority, ticket.AssigneeId, null, ticket.Position, [], tags ?? [], archived, ticket.Revision);
 
     [Fact]
+    public async Task BoardIconsPersistAndRemainCompatibleWithExistingClients()
+    {
+        await using var factory = new AppFactory();
+        using var client = factory.Browser();
+        await Login(client);
+        var legacy = await CreateBoard(client, "Existing client");
+        Assert.Equal("columns", legacy.Icon);
+
+        using var created = await client.PostAsJsonAsync("/api/boards", new { name = "Projects", description = "", icon = "rocket" });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var board = (await created.Content.ReadFromJsonAsync<Board>())!;
+        Assert.Equal("rocket", board.Icon);
+        var columns = board.Columns.Select(column => new ColumnRequest(column.Id, column.Name, column.IsDone)).ToArray();
+        var edit = new UpdateBoardRequest(board.Name, board.Description, [], columns, board.Revision, "house");
+        using var updated = await client.PutAsJsonAsync($"/api/boards/{board.Id}", edit);
+        Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+        board = (await updated.Content.ReadFromJsonAsync<Board>())!;
+        Assert.Equal("house", board.Icon);
+
+        using var invalid = await client.PutAsJsonAsync($"/api/boards/{board.Id}", edit with { Icon = "unknown", Revision = board.Revision });
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+        using var stale = await client.PutAsJsonAsync($"/api/boards/{board.Id}", edit);
+        Assert.Equal(HttpStatusCode.Conflict, stale.StatusCode);
+        using var oldClient = await client.PutAsJsonAsync($"/api/boards/{board.Id}", new { board.Name, board.Description, members = Array.Empty<string>(), columns, board.Revision });
+        Assert.Equal(HttpStatusCode.OK, oldClient.StatusCode);
+        var reloaded = (await client.GetFromJsonAsync<BoardResponse>($"/api/boards/{board.Id}"))!;
+        Assert.Equal("house", reloaded.Board.Icon);
+        Assert.Equal(board.Revision + 1, reloaded.Board.Revision);
+        using var invalidCreate = await client.PostAsJsonAsync("/api/boards", new { name = "Invalid icon", description = "", icon = "unknown" });
+        Assert.Equal(HttpStatusCode.BadRequest, invalidCreate.StatusCode);
+    }
+
+    [Fact]
     public async Task LocalHttpDevelopmentSupportsLoginAndStillRequiresCsrf()
     {
         await using var factory = new AppFactory();
