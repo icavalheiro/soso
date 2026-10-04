@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState, useDeferredValue } from 'react';
 import { ActionIcon, Avatar, Badge, Button, Group, Loader, Modal, PasswordInput, Select, Stack, Text, TextInput, Tooltip, useMantineColorScheme } from '@mantine/core';
-import { Archive, Columns3, Plus, Search, Settings, LogOut, Sun, Moon, PanelLeftClose, PanelLeftOpen, RefreshCw, Users, LayoutGrid } from 'lucide-react';
+import { Archive, Columns3, Plus, Search, Settings, LogOut, Sun, Moon, PanelLeftClose, PanelLeftOpen, RefreshCw, Users, SlidersHorizontal } from 'lucide-react';
 import { api, ApiError, refreshCsrf, imageUrl, ticketBody, tags } from './api';
 import type { Account, Board, BoardData, Ticket } from './api';
 import { reportError } from './feedback';
@@ -14,7 +14,7 @@ const ArchiveModal = lazy( () => import( './ArchiveModal' ).then( module => ( { 
 
 function IconButton ( { label, children, onClick, expanded, controls }: { label: string; children: React.ReactNode; onClick: () => void; expanded?: boolean; controls?: string; } )
 {
-    return <Tooltip label={ label }><ActionIcon aria-label={ label } aria-expanded={ expanded } aria-controls={ controls } variant="subtle" color="gray" size="lg" onClick={ onClick }>{ children }</ActionIcon></Tooltip>;
+    return <Tooltip label={ label }><ActionIcon aria-label={ label } aria-expanded={ expanded } aria-controls={ controls } variant="subtle" color="gray" size="sm" onClick={ onClick }>{ children }</ActionIcon></Tooltip>;
 }
 
 export default function Workspace ()
@@ -37,6 +37,7 @@ export default function Workspace ()
     const [ priority, setPriority ] = useState( 'all' );
     const [ tagFilter, setTagFilter ] = useState<string[]>( [] );
     const [ assignee, setAssignee ] = useState( 'all' );
+    const [ filtersOpen, setFiltersOpen ] = useState( false );
     const [ archive, setArchive ] = useState( false );
     const [ selected, setSelected ] = useState<Ticket | null>( null );
     const [ boardModal, setBoardModal ] = useState<'create' | 'edit' | null>( null );
@@ -226,6 +227,7 @@ export default function Workspace ()
         const matchesAssignee = assignee === 'all' || ( assignee === 'unassigned' ? ticket.assigneeId === null : ticket.assigneeId === assignee );
         return !ticket.archived && matchesQuery && matchesPriority && matchesTags && matchesAssignee;
     } ) ?? [];
+    const activeFilters = tagFilter.length + Number( priority !== 'all' ) + Number( assignee !== 'all' );
 
     return <div className={ `app-shell ${ collapsed ? 'is-collapsed' : '' }` }>
         <aside className="sidebar" id="workspace-sidebar" aria-label="Workspace navigation">
@@ -239,11 +241,35 @@ export default function Workspace ()
             </div>
         </aside>
         <main className="workspace">
-            <header className="topbar"><Group gap={ 9 } wrap="nowrap" className="topbar-title"><IconButton label={ collapsed ? 'Expand sidebar' : 'Collapse sidebar' } onClick={ toggleSidebar } expanded={ !collapsed } controls="workspace-sidebar">{ collapsed ? <PanelLeftOpen size={ 20 } /> : <PanelLeftClose size={ 20 } /> }</IconButton><span className="workspace-label">Sosô</span><span className="separator">/</span>{ data && <BoardIcon icon={ data.board.icon } color={ data.board.color } size={ 16 } /> }<Text size="sm" fw={ 600 } truncate>{ data?.board.name ?? 'Boards' }</Text></Group><Group gap={ 3 } wrap="nowrap"><IconButton label="Refresh board" onClick={ () => { void reload(); } }><RefreshCw size={ 18 } /></IconButton><IconButton label={ colorScheme === 'dark' ? 'Light theme' : 'Dark theme' } onClick={ () => { void toggleTheme(); } }>{ colorScheme === 'dark' ? <Sun size={ 18 } /> : <Moon size={ 18 } /> }</IconButton><IconButton label="Sign out" onClick={ () => { void api( '/auth/logout', 'POST' ).then( () => { setAccount( null ); setData( null ); setBoards( [] ); } ).catch( reportError ); } }><LogOut size={ 18 } /></IconButton></Group></header>
-            { data ? <><section className="board-heading"><div className="board-title"><div className="eyebrow"><LayoutGrid size={ 13 } /> BOARD <span>{ data.tickets.length } tickets</span></div><h1>{ data.board.name }</h1>{ data.board.description && <p>{ data.board.description }</p> }</div><Group gap="sm" wrap="nowrap"><Avatar.Group className="board-avatars">{ data.members.slice( 0, 4 ).map( member => <Tooltip key={ member.id } label={ member.name }><Avatar size={ 30 } radius="xl" src={ imageUrl( member.avatarId ) }>{ member.name.slice( 0, 1 ) }</Avatar></Tooltip> ) }</Avatar.Group>{ canManage && <IconButton label="Board settings" onClick={ () => { setBoardModal( 'edit' ); } }><Settings size={ 19 } /></IconButton> }<Button size="xs" leftSection={ <Plus size={ 15 } /> } onClick={ () => { setNewColumn( data.board.columns[ 0 ].id ); } }>New ticket</Button></Group></section>
-                <section className="board-toolbar"><TextInput aria-label="Search tickets" placeholder="Search cards..." leftSection={ <Search size={ 15 } /> } size="xs" value={ search } onChange={ event => { setSearch( event.currentTarget.value ); } } /><div className="tag-filters">{ tags.map( tag => <button key={ tag.value } className={ `tag-filter ${ tagFilter.includes( tag.value ) ? 'selected' : '' }` } aria-pressed={ tagFilter.includes( tag.value ) } onClick={ () => { setTagFilter( previous => previous.includes( tag.value ) ? previous.filter( value => value !== tag.value ) : [ ...previous, tag.value ] ); } }><i style={ { background: tag.color } } />{ tag.label }</button> ) }</div><Select size="xs" aria-label="Filter by assignee" value={ assignee } onChange={ value => { setAssignee( value ?? 'all' ); } } data={ [ { label: 'All assignees', value: 'all' }, { label: 'Unassigned', value: 'unassigned' }, ...data.members.map( member => ( { value: member.id, label: member.name } ) ) ] } className="assignee-filter" allowDeselect={ false } /><Select size="xs" aria-label="Filter by priority" value={ priority } onChange={ value => { setPriority( value ?? 'all' ); } } data={ [ { label: 'All priorities', value: 'all' }, ...[ 'urgent', 'high', 'normal', 'low' ].map( value => ( { value, label: value[ 0 ].toUpperCase() + value.slice( 1 ) } ) ) ] } className="priority-filter" allowDeselect={ false } /><Button size="xs" variant="default" leftSection={ <Archive size={ 14 } /> } onClick={ () => { setArchive( true ); } }>Archive</Button><Badge variant="light" color="gray" size="sm">{ filtered.length }</Badge>{ boardLoading && <Loader size={ 15 } /> }</section>
+            <header className="topbar">
+                <Group gap={ 6 } wrap="nowrap" className="topbar-title"><IconButton label={ collapsed ? 'Expand sidebar' : 'Collapse sidebar' } onClick={ toggleSidebar } expanded={ !collapsed } controls="workspace-sidebar">{ collapsed ? <PanelLeftOpen size={ 16 } /> : <PanelLeftClose size={ 16 } /> }</IconButton><span className="workspace-label">Sosô</span><span className="separator">/</span>{ data && <BoardIcon icon={ data.board.icon } color={ data.board.color } size={ 14 } /> }<Text className="topbar-board-name" size="xs" fw={ 600 } truncate>{ data?.board.name ?? 'Boards' }</Text></Group>
+                <Group gap={ 4 } wrap="nowrap" className="topbar-actions">
+                    { data && <TextInput className="topbar-search" aria-label="Search tickets" placeholder="Search cards..." leftSection={ <Search size={ 14 } /> } size="xs" value={ search } onChange={ event => { setSearch( event.currentTarget.value ); } } /> }
+                    <IconButton label="Refresh board" onClick={ () => { void reload(); } }>{ boardLoading ? <Loader size={ 14 } /> : <RefreshCw size={ 15 } /> }</IconButton>
+                    <IconButton label={ colorScheme === 'dark' ? 'Light theme' : 'Dark theme' } onClick={ () => { void toggleTheme(); } }>{ colorScheme === 'dark' ? <Sun size={ 15 } /> : <Moon size={ 15 } /> }</IconButton>
+                    <IconButton label="Sign out" onClick={ () => { void api( '/auth/logout', 'POST' ).then( () => { setAccount( null ); setData( null ); setBoards( [] ); } ).catch( reportError ); } }><LogOut size={ 15 } /></IconButton>
+                </Group>
+            </header>
+            { data ? <><section className="board-heading">
+                <div className="board-title"><h1>{ data.board.name }</h1><Badge className="board-ticket-count" variant="light" color="gray" size="sm">{ filtered.length } { filtered.length === 1 ? 'ticket' : 'tickets' }</Badge>{ data.board.description && <p>{ data.board.description }</p> }</div>
+                <Group className="board-actions" gap={ 6 }>
+                    <Avatar.Group className="board-avatars">{ data.members.slice( 0, 4 ).map( member => <Tooltip key={ member.id } label={ member.name }><Avatar size={ 24 } radius="xl" src={ imageUrl( member.avatarId ) }>{ member.name.slice( 0, 1 ) }</Avatar></Tooltip> ) }</Avatar.Group>
+                    { canManage && <IconButton label="Board settings" onClick={ () => { setBoardModal( 'edit' ); } }><Settings size={ 16 } /></IconButton> }
+                    <Button size="xs" variant={ activeFilters > 0 ? 'light' : 'default' } leftSection={ <SlidersHorizontal size={ 14 } /> } aria-haspopup="dialog" onClick={ () => { setFiltersOpen( true ); } }>Filters{ activeFilters > 0 ? ` (${ activeFilters })` : '' }</Button>
+                    <Button size="xs" variant="default" leftSection={ <Archive size={ 14 } /> } onClick={ () => { setArchive( true ); } }>Archive</Button>
+                    <Button size="xs" leftSection={ <Plus size={ 14 } /> } onClick={ () => { setNewColumn( data.board.columns[ 0 ].id ); } }>New ticket</Button>
+                </Group>
+            </section>
                 <Suspense fallback={ <Loader m="xl" /> }><Kanban data={ data } tickets={ filtered } onOpen={ setSelected } onCreate={ setNewColumn } onMove={ move } /></Suspense></> : <div className="empty-workspace">{ boardLoading || activeId ? <Loader /> : <><Columns3 size={ 42 } strokeWidth={ 1.2 } /><h1>Your workspace, ready.</h1><Button leftSection={ <Plus size={ 17 } /> } onClick={ () => { setBoardModal( 'create' ); } }>Create a board</Button></> }</div> }
         </main>
+        <Modal opened={ filtersOpen && data !== null } onClose={ () => { setFiltersOpen( false ); } } title="Filters" centered size="sm">
+            <Stack>
+                <div><Text size="sm" fw={ 500 } mb={ 8 }>Tags</Text><div className="tag-filters">{ tags.map( tag => <button key={ tag.value } className={ `tag-filter ${ tagFilter.includes( tag.value ) ? 'selected' : '' }` } aria-pressed={ tagFilter.includes( tag.value ) } onClick={ () => { setTagFilter( previous => previous.includes( tag.value ) ? previous.filter( value => value !== tag.value ) : [ ...previous, tag.value ] ); } }><i style={ { background: tag.color } } />{ tag.label }</button> ) }</div></div>
+                <Select label="Assignee" aria-label="Filter by assignee" value={ assignee } onChange={ value => { setAssignee( value ?? 'all' ); } } data={ [ { label: 'All assignees', value: 'all' }, { label: 'Unassigned', value: 'unassigned' }, ...( data?.members ?? [] ).map( member => ( { value: member.id, label: member.name } ) ) ] } allowDeselect={ false } />
+                <Select label="Priority" aria-label="Filter by priority" value={ priority } onChange={ value => { setPriority( value ?? 'all' ); } } data={ [ { label: 'All priorities', value: 'all' }, ...[ 'urgent', 'high', 'normal', 'low' ].map( value => ( { value, label: value[ 0 ].toUpperCase() + value.slice( 1 ) } ) ) ] } allowDeselect={ false } />
+                <Group justify="space-between"><Button variant="subtle" disabled={ activeFilters === 0 } onClick={ () => { setPriority( 'all' ); setAssignee( 'all' ); setTagFilter( [] ); } }>Clear filters</Button><Button onClick={ () => { setFiltersOpen( false ); } }>Done</Button></Group>
+            </Stack>
+        </Modal>
         <Suspense fallback={ <Loader className="modal-loading" /> }>
             { selected && data && <TicketModal key={ selected.id } ticket={ selected } data={ data } account={ account } onClose={ () => { setSelected( null ); } } onChange={ changed } onDelete={ id => { setData( previous => previous ? { ...previous, tickets: previous.tickets.filter( ticket => ticket.id !== id ) } : previous ); setSelected( null ); } } /> }
             { boardModal && <BoardModal board={ boardModal === 'edit' ? data?.board : undefined } onClose={ () => { setBoardModal( null ); } } onSave={ board => { setBoards( previous => [ ...previous.filter( item => item.id !== board.id ), board ] ); selectBoard( board.id ); setBoardModal( null ); void api<BoardData>( `/boards/${ board.id }` ).then( setData ).catch( reportError ); } } onDelete={ id => { const remaining = boards.filter( board => board.id !== id ); setBoards( remaining ); selectBoard( remaining[ 0 ]?.id ?? '' ); setData( null ); setBoardModal( null ); } } /> }

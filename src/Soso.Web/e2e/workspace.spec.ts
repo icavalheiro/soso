@@ -148,6 +148,7 @@ test( 'login, software tags and assignee filters', async ( { page } ) =>
     await expect( page.locator( '.brand strong' ) ).toHaveText( 'SosôOrganizando tua vida :D' );
     await expect( page.locator( '.workspace-label' ) ).toHaveText( 'Sosô' );
     await expect( page.locator( '.ticket' ) ).toHaveCount( 4 );
+    await page.getByRole( 'button', { name: 'Filters', exact: true } ).click();
     await page.getByRole( 'button', { name: 'Bug', exact: true } ).click();
     await expect( page.locator( '.ticket' ) ).toHaveCount( 1 );
     await expect( page.locator( '.ticket' ) ).toContainText( 'Fix drag-and-drop glitch' );
@@ -155,9 +156,57 @@ test( 'login, software tags and assignee filters', async ( { page } ) =>
     await page.getByRole( 'combobox', { name: 'Filter by assignee' } ).click();
     await page.getByRole( 'option', { name: 'Maya Chen' } ).click();
     await expect( page.locator( '.ticket' ) ).toHaveCount( 2 );
+    await page.getByRole( 'button', { name: 'Done', exact: true } ).click();
     await page.getByLabel( 'Search tickets' ).fill( 'sprint' );
     await expect( page.locator( '.ticket' ) ).toHaveCount( 1 );
 } );
+
+for ( const width of [ 1366, 390 ] )
+{
+    test( `compact board header and filter dialog at ${ width }px`, async ( { page }, testInfo ) =>
+    {
+        await page.setViewportSize( { width, height: 900 } );
+        await installApiMock( page );
+        await page.goto( '/' );
+        await expect( page.locator( '.board-ticket-count' ) ).toHaveText( '4 tickets' );
+        await expect( page.locator( '.ticket' ) ).toHaveCount( 4 );
+        await expect( page.locator( '.eyebrow, .board-toolbar' ) ).toHaveCount( 0 );
+        await expect( page.locator( '.topbar' ).getByRole( 'textbox', { name: 'Search tickets' } ) ).toBeVisible();
+        await expect( page.locator( '.board-avatars' ) ).toBeVisible();
+        const topbar = ( await page.locator( '.topbar' ).boundingBox() )!;
+        const heading = ( await page.locator( '.board-heading' ).boundingBox() )!;
+        expect( topbar.height ).toBe( 42 );
+        expect( heading.y ).toBe( 42 );
+        expect( heading.height ).toBeLessThan( width < 768 ? 110 : 65 );
+        for ( const selector of [ '.topbar', '.board-heading' ] )
+        {
+            expect( await page.locator( selector ).evaluate( element => element.scrollWidth <= element.clientWidth ) ).toBeTruthy();
+        }
+        await page.screenshot( { path: testInfo.outputPath( 'compact-header.png' ) } );
+        await page.getByLabel( 'Search tickets' ).fill( 'glitch' );
+        await expect( page.locator( '.board-ticket-count' ) ).toHaveText( '1 ticket' );
+        await page.getByLabel( 'Search tickets' ).fill( '' );
+        await page.getByRole( 'button', { name: 'Filters', exact: true } ).click();
+        const dialog = page.getByRole( 'dialog', { name: 'Filters', exact: true } );
+        await dialog.getByRole( 'button', { name: 'Bug', exact: true } ).click();
+        await dialog.getByRole( 'combobox', { name: 'Filter by priority' } ).click();
+        await page.getByRole( 'option', { name: 'Urgent', exact: true } ).click();
+        await page.screenshot( { path: testInfo.outputPath( 'filters.png' ) } );
+        await dialog.getByRole( 'button', { name: 'Done', exact: true } ).click();
+        await expect( dialog ).toBeHidden();
+        await expect( page.locator( '.ticket' ) ).toHaveCount( 1 );
+        await page.getByRole( 'button', { name: 'Filters (2)', exact: true } ).click();
+        await expect( dialog.getByRole( 'button', { name: 'Bug', exact: true } ) ).toHaveAttribute( 'aria-pressed', 'true' );
+        await dialog.getByRole( 'button', { name: 'Clear filters', exact: true } ).click();
+        await dialog.getByRole( 'button', { name: 'Done', exact: true } ).click();
+        await expect( page.locator( '.board-ticket-count' ) ).toHaveText( '4 tickets' );
+        await page.locator( '.board-actions' ).getByRole( 'button', { name: 'Archive', exact: true } ).click();
+        await expect( page.getByRole( 'dialog' ) ).toBeVisible();
+        await page.keyboard.press( 'Escape' );
+        await page.locator( '.board-actions' ).getByRole( 'button', { name: 'New ticket', exact: true } ).click();
+        await expect( page.getByRole( 'dialog', { name: 'New ticket', exact: true } ) ).toBeVisible();
+    } );
+}
 
 test( 'create and edit board icons persist after reload', async ( { page }, testInfo ) =>
 {
