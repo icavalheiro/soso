@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { ActionIcon, Avatar, Button, Checkbox, FileButton, Group, Modal, MultiSelect, Progress, Select, Stack, Text, Textarea, TextInput, Tooltip } from '@mantine/core';
-import { Archive, ArchiveRestore, CheckSquare, ImagePlus, MessageSquare, Plus, Save, Send, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, CheckSquare, Eye, ImagePlus, MessageSquare, Pencil, Plus, Save, Send, Trash2 } from 'lucide-react';
 import { api, imageUrl, newId, ticketBody, tags } from './api';
 import type { Account, BoardData, Ticket } from './api';
 import { reportError } from './feedback';
@@ -14,6 +16,7 @@ export function TicketModal ( { ticket, data, account, onClose, onChange, onDele
     const [ busy, setBusy ] = useState( false );
     const [ confirm, setConfirm ] = useState<'delete' | 'discard' | null>( null );
     const [ preview, setPreview ] = useState<string | null>( null );
+    const [ editingDescription, setEditingDescription ] = useState( false );
     const path = `/boards/${ ticket.boardId }/tickets/${ ticket.id }`;
     const done = draft.subtasks.filter( task => task.done ).length;
 
@@ -81,7 +84,21 @@ export function TicketModal ( { ticket, data, account, onClose, onChange, onDele
                 <TextInput aria-label="Ticket title" className="ticket-title-input" required maxLength={ 160 } value={ draft.title } onChange={ event => { setDraft( { ...draft, title: event.currentTarget.value } ); } } />
                 <div className="ticket-editor-grid"><div className="ticket-editor-main"><Stack gap="lg">
                     <MultiSelect label="Tags" value={ draft.tags } onChange={ tags => { setDraft( { ...draft, tags } ); } } data={ tags } searchable />
-                    <Textarea label="Description" placeholder="Add a description" minRows={ 4 } autosize maxRows={ 12 } maxLength={ 12000 } value={ draft.description } onChange={ event => { setDraft( { ...draft, description: event.currentTarget.value } ); } } />
+                    <section aria-label="Description">
+                        <Group justify="space-between" mb="sm">
+                            <Text size="sm" fw={ 600 }>Description</Text>
+                            <Tooltip label={ editingDescription ? 'Preview description' : 'Edit description' }>
+                                <ActionIcon type="button" variant="subtle" aria-label={ editingDescription ? 'Preview description' : 'Edit description' } disabled={ busy } onClick={ () => { setEditingDescription( !editingDescription ); } }>
+                                    { editingDescription ? <Eye size={ 16 } /> : <Pencil size={ 16 } /> }
+                                </ActionIcon>
+                            </Tooltip>
+                        </Group>
+                        { editingDescription ?
+                            <Textarea aria-label="Description" placeholder="Add a description" minRows={ 4 } autosize maxRows={ 12 } maxLength={ 12000 } autoFocus value={ draft.description } onChange={ event => { setDraft( { ...draft, description: event.currentTarget.value } ); } } /> :
+                            <div className="ticket-description-markdown">
+                                { draft.description.trim() ? <Markdown remarkPlugins={ [ remarkGfm ] } skipHtml>{ draft.description }</Markdown> : <Text size="sm" c="dimmed">No description</Text> }
+                            </div> }
+                    </section>
                     <section><Group justify="space-between" mb="sm"><Text size="sm" fw={ 600 }><CheckSquare size={ 15 } className="inline-icon" /> Subtasks</Text><Text c="dimmed" size="xs">{ done } / { draft.subtasks.length }</Text></Group>{ draft.subtasks.length > 0 && <Progress size={ 4 } value={ done / draft.subtasks.length * 100 } mb="md" /> }<Stack gap={ 9 }>{ draft.subtasks.map( task => <Group key={ task.id } gap="xs" wrap="nowrap"><Checkbox aria-label={ `Complete ${ task.title }` } checked={ task.done } onChange={ event => { const checked = event.currentTarget.checked; setDraft( { ...draft, subtasks: draft.subtasks.map( item => item.id === task.id ? { ...item, done: checked } : item ) } ); } } /><TextInput aria-label="Subtask title" variant="unstyled" maxLength={ 300 } required value={ task.title } className={ task.done ? 'completed-task' : '' } style={ { flex: 1 } } onChange={ event => { const title = event.currentTarget.value; setDraft( { ...draft, subtasks: draft.subtasks.map( item => item.id === task.id ? { ...item, title } : item ) } ); } } /><Tooltip label="Remove subtask"><ActionIcon aria-label="Remove subtask" color="gray" variant="subtle" onClick={ () => { setDraft( { ...draft, subtasks: draft.subtasks.filter( item => item.id !== task.id ) } ); } }><Trash2 size={ 14 } /></ActionIcon></Tooltip></Group> ) }</Stack><Group gap="xs" mt="sm" wrap="nowrap"><TextInput aria-label="New subtask" placeholder="Add a subtask" maxLength={ 300 } value={ subtask } style={ { flex: 1 } } onChange={ event => { setSubtask( event.currentTarget.value ); } } onKeyDown={ event => { if ( event.key === 'Enter' ) { event.preventDefault(); addSubtask(); } } } /><Tooltip label="Add subtask"><ActionIcon aria-label="Add subtask" size="lg" variant="light" disabled={ draft.subtasks.length >= 100 || !subtask.trim() } onClick={ addSubtask }><Plus size={ 18 } /></ActionIcon></Tooltip></Group></section>
                     <section><Group justify="space-between" mb="sm"><Text size="sm" fw={ 600 }>Images</Text><FileButton accept="image/png,image/jpeg,image/webp" onChange={ file => { if ( !file ) { return; } void action( async () => { await saveDraft(); const form = new FormData(); form.append( 'file', file ); apply( await api<Ticket>( `${ path }/images`, 'POST', form ) ); } ); } }>{ props => <Button { ...props } size="xs" variant="subtle" disabled={ busy || draft.images.length >= 6 } leftSection={ <ImagePlus size={ 15 } /> }>Add image</Button> }</FileButton></Group><div className="attachment-grid">{ draft.images.map( id => <div className="attachment" key={ id }><button type="button" aria-label="View attached image" onClick={ () => { setPreview( id ); } }><img src={ imageUrl( id ) } alt="Ticket attachment" /></button><Tooltip label="Remove image"><ActionIcon className="attachment-remove" aria-label="Remove image" size="sm" color="red" variant="filled" onClick={ () => { void action( async () => { await saveDraft(); apply( await api<Ticket>( `${ path }/images/${ id }`, 'DELETE' ) ); } ); } }><Trash2 size={ 13 } /></ActionIcon></Tooltip></div> ) }</div></section>
                     <section><Text size="sm" fw={ 600 } mb="md"><MessageSquare size={ 15 } className="inline-icon" /> Comments</Text><Stack gap="md">{ draft.comments.map( item =>
