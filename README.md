@@ -17,6 +17,31 @@ A lightweight, llm/mcp friendly, software-development kanban workspace built wit
 - Administrator-only account creation, disabling and password resets. No public sign-up.
 - Authenticated built-in Streamable HTTP MCP server at `/mcp`.
 
+## Run With Docker (Recommended)
+
+The preferred way to run Sosô is Docker using the prebuilt image from [GitHub Container Registry](https://github.com/icavalheiro/soso/pkgs/container/soso). You do not need the source code, Docker Compose, the .NET SDK or Node.js.
+
+Create a private `soso.env` file with the following environment variables, replacing the hostname, email and password with your own values. Do not commit this file; restrict its filesystem permissions.
+
+```dotenv
+ASPNETCORE_ENVIRONMENT=Production
+Bootstrap__Email=admin@example.com
+Bootstrap__Password=replace-with-a-unique-strong-password
+Bootstrap__Name=Administrator
+AllowedHosts=soso.example.com;127.0.0.1;localhost
+CloudflareTunnel=true
+Logging__LogLevel__Default=Warning
+```
+
+`Bootstrap__Email` and `Bootstrap__Password` are required on first startup; the password must be 14-128 characters. `Bootstrap__Name` is optional. Bootstrap settings never overwrite existing accounts. Set `AllowedHosts` to your public hostname, keeping the loopback entries. `CloudflareTunnel=true` is for a host-based Cloudflare Tunnel; if Docker gateway detection fails, add `TrustedProxy=<exact-tunnel-peer-IP>` to the file. These are application variable names, not the `BOOTSTRAP_EMAIL`, `BOOTSTRAP_PASSWORD` and `DOMAIN` substitutions used by Compose.
+
+Download and run the image with Docker CLI:
+
+```cmd
+docker pull ghcr.io/icavalheiro/soso:latest
+docker run -d --name soso --restart unless-stopped --env-file soso.env -p 127.0.0.1:8060:8080 -v soso-data:/app/data --read-only --tmpfs /tmp:size=64m,mode=1777 --cap-drop ALL --security-opt no-new-privileges:true --memory 512m --cpus 1 ghcr.io/icavalheiro/soso:latest
+```
+
 ## Local Development
 
 Requires .NET 10 SDK and Node.js 24. A localhost development HTTPS certificate must be available and trusted by your browser. If needed, run `dotnet dev-certs https --trust` yourself.
