@@ -22,6 +22,7 @@ public sealed class Board
     public string Name { get; set; } = "";
     public string Description { get; set; } = "";
     public string Icon { get; set; } = "columns";
+    public string Color { get; set; } = "teal";
     public string OwnerId { get; set; } = "";
     public List<string> Members { get; set; } = [];
     public List<BoardColumn> Columns { get; set; } = [];

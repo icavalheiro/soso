@@ -11,6 +11,7 @@ public sealed class BoardService(Store store)
 {
     public static readonly string[] AllowedTags = ["bug", "feature", "design", "docs", "refactor", "test", "chore", "research"];
     public static readonly string[] AllowedIcons = ["columns", "briefcase", "house", "heart", "star", "rocket", "code", "book", "graduation-cap", "plane", "wallet", "target"];
+    public static readonly string[] AllowedColors = ["teal", "blue", "cyan", "green", "grape", "pink", "orange", "gray"];
     public static string UserId(ClaimsPrincipal user) => user.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new ApiException(401, "Sign in required.");
 
     public Board RequireBoard(string id, ClaimsPrincipal user, bool ownerOnly = false)
@@ -49,7 +50,7 @@ public sealed class BoardService(Store store)
 
     public Board Create(CreateBoardRequest request, ClaimsPrincipal user)
     {
-        var board = new Board { Name = Text(request.Name, 80), Description = request.Description.Trim(), Icon = CheckIcon(request.Icon ?? "columns"), OwnerId = UserId(user), Columns = [new() { Name = "To do" }, new() { Name = "In progress" }, new() { Name = "Done", IsDone = true }] };
+        var board = new Board { Name = Text(request.Name, 80), Description = request.Description.Trim(), Icon = CheckIcon(request.Icon ?? "columns"), Color = CheckColor(request.Color ?? "teal"), OwnerId = UserId(user), Columns = [new() { Name = "To do" }, new() { Name = "In progress" }, new() { Name = "Done", IsDone = true }] };
         lock (store.Gate)
         {
             store.Boards.Insert(board);
@@ -78,6 +79,7 @@ public sealed class BoardService(Store store)
             board.Name = Text(request.Name, 80);
             board.Description = request.Description.Trim();
             board.Icon = CheckIcon(request.Icon ?? board.Icon);
+            board.Color = CheckColor(request.Color ?? board.Color);
             board.Members = request.Members.Distinct().ToList();
             board.Columns = request.Columns.Select(column => new BoardColumn { Id = column.Id, Name = Text(column.Name, 60), IsDone = column.IsDone }).ToList();
             board.Revision++;
@@ -168,6 +170,16 @@ public sealed class BoardService(Store store)
             throw new ApiException(400, $"Text must contain between 1 and {maximum} characters.");
         }
         return value.Trim();
+    }
+
+    private static string CheckColor(string color)
+    {
+        var allowed = AllowedColors.Contains(color);
+        if (!allowed)
+        {
+            throw new ApiException(400, "Unknown board color.");
+        }
+        return color;
     }
 
     private static string CheckIcon(string icon)

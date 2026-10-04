@@ -18,9 +18,9 @@ public sealed record PasswordRequest([Required, MaxLength(128)] string CurrentPa
 /// <summary>Administrative account state and optional password reset.</summary>
 public sealed record AccountStateRequest(bool Disabled, [MinLength(14), MaxLength(128)] string? Password);
 /// <summary>Board title and description.</summary>
-public sealed record CreateBoardRequest([Required, MaxLength(80)] string Name, [Required(AllowEmptyStrings = true), MaxLength(2000)] string Description, [MaxLength(32)] string? Icon = null);
+public sealed record CreateBoardRequest([Required, MaxLength(80)] string Name, [Required(AllowEmptyStrings = true), MaxLength(2000)] string Description, [MaxLength(32)] string? Icon = null, [MaxLength(32)] string? Color = null);
 /// <summary>Board configuration and membership.</summary>
-public sealed record UpdateBoardRequest([Required, MaxLength(80)] string Name, [Required(AllowEmptyStrings = true), MaxLength(2000)] string Description, [Required, MaxLength(100)] string[] Members, [Required, MinLength(1), MaxLength(20)] ColumnRequest[] Columns, int Revision, [MaxLength(32)] string? Icon = null);
+public sealed record UpdateBoardRequest([Required, MaxLength(80)] string Name, [Required(AllowEmptyStrings = true), MaxLength(2000)] string Description, [Required, MaxLength(100)] string[] Members, [Required, MinLength(1), MaxLength(20)] ColumnRequest[] Columns, int Revision, [MaxLength(32)] string? Icon = null, [MaxLength(32)] string? Color = null);
 /// <summary>Column definition.</summary>
 public sealed record ColumnRequest([Required, MaxLength(32)] string Id, [Required, MaxLength(60)] string Name, bool IsDone);
 /// <summary>New ticket in a board column.</summary>
