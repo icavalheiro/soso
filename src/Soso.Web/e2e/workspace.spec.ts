@@ -23,9 +23,13 @@ for ( const width of [ 1366, 390 ] )
             const root = page.locator( 'html' );
             const oppositeTheme = systemTheme === 'dark' ? 'light' : 'dark';
             await expect( root ).toHaveAttribute( 'data-mantine-color-scheme', systemTheme );
+            await expect( root ).toHaveCSS( '--accent', systemTheme === 'dark' ? '#c99a48' : '#8c641f' );
+            await expect( page.getByRole( 'button', { name: 'Sign in', exact: true } ) ).toHaveCSS( 'background-color', 'rgb(140, 100, 31)' );
             await expect( page.getByRole( 'button', { name: systemTheme === 'dark' ? 'Light theme' : 'Dark theme', exact: true } ) ).toBeVisible();
             await page.emulateMedia( { colorScheme: oppositeTheme } );
             await expect( root ).toHaveAttribute( 'data-mantine-color-scheme', oppositeTheme );
+            await expect( root ).toHaveCSS( '--accent', oppositeTheme === 'dark' ? '#c99a48' : '#8c641f' );
+            await expect( page.getByRole( 'button', { name: 'Sign in', exact: true } ) ).toHaveCSS( 'background-color', 'rgb(140, 100, 31)' );
             await page.getByRole( 'button', { name: oppositeTheme === 'dark' ? 'Light theme' : 'Dark theme', exact: true } ).click();
             await expect( root ).toHaveAttribute( 'data-mantine-color-scheme', systemTheme );
             await page.reload();

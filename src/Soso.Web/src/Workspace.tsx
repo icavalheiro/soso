@@ -215,7 +215,7 @@ export default function Workspace ()
 
     if ( booting )
     {
-        return <div className="loading-screen"><Loader color="teal" /></div>;
+        return <div className="loading-screen"><Loader /></div>;
     }
     if ( !account )
     {
