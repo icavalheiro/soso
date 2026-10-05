@@ -4,9 +4,11 @@ import { Archive, ArchiveRestore, Search } from 'lucide-react';
 import { api, ticketBody } from './api';
 import type { BoardData, Ticket } from './api';
 import { reportError } from './feedback';
+import { useLanguage } from './language';
 
 export function ArchiveModal ( { data, onClose, onOpen, onChange }: { data: BoardData; onClose: () => void; onOpen: ( ticket: Ticket ) => void; onChange: ( ticket: Ticket ) => void; } )
 {
+    const { t } = useLanguage();
     const [ mode, setMode ] = useState( 'done' );
     const [ search, setSearch ] = useState( '' );
     const [ busy, setBusy ] = useState( false );
@@ -32,5 +34,5 @@ export function ArchiveModal ( { data, onClose, onOpen, onChange }: { data: Boar
             setBusy( false );
         }
     }
-    return <Modal opened onClose={ onClose } title="Archive" centered size="lg"><Stack><SegmentedControl value={ mode } onChange={ setMode } data={ [ { value: 'done', label: 'Done' }, { value: 'archived', label: 'Archived' } ] } /><TextInput aria-label="Search archive" placeholder="Search tickets" leftSection={ <Search size={ 16 } /> } value={ search } onChange={ event => { setSearch( event.currentTarget.value ); } } />{ tickets.length === 0 && <Text size="sm" c="dimmed" ta="center" py="xl">No { mode === 'done' ? 'completed' : 'archived' } tickets</Text> }{ tickets.map( ticket => <Group key={ ticket.id } className="archive-row" wrap="nowrap"><button className="archive-title" onClick={ () => { onClose(); onOpen( ticket ); } }>{ ticket.title }<small>{ data.board.columns.find( column => column.id === ticket.columnId )?.name }</small></button><Tooltip label={ ticket.archived ? 'Restore ticket' : 'Archive ticket' }><ActionIcon aria-label={ ticket.archived ? 'Restore ticket' : 'Archive ticket' } variant="subtle" disabled={ busy } onClick={ () => { void toggle( ticket ); } }>{ ticket.archived ? <ArchiveRestore size={ 18 } /> : <Archive size={ 18 } /> }</ActionIcon></Tooltip></Group> ) }</Stack></Modal>;
+    return <Modal opened onClose={ onClose } title={ t( 'Archive list' ) } centered size="lg"><Stack><SegmentedControl value={ mode } onChange={ setMode } data={ [ { value: 'done', label: t( 'Done' ) }, { value: 'archived', label: t( 'Archived' ) } ] } /><TextInput aria-label={ t( 'Search archive' ) } placeholder={ t( 'Search tickets' ) } leftSection={ <Search size={ 16 } /> } value={ search } onChange={ event => { setSearch( event.currentTarget.value ); } } />{ tickets.length === 0 && <Text size="sm" c="dimmed" ta="center" py="xl">{ t( mode === 'done' ? 'No completed tickets' : 'No archived tickets' ) }</Text> }{ tickets.map( ticket => <Group key={ ticket.id } className="archive-row" wrap="nowrap"><button className="archive-title" onClick={ () => { onClose(); onOpen( ticket ); } }>{ ticket.title }<small>{ data.board.columns.find( column => column.id === ticket.columnId )?.name }</small></button><Tooltip label={ t( ticket.archived ? 'Restore ticket' : 'Archive ticket' ) }><ActionIcon aria-label={ t( ticket.archived ? 'Restore ticket' : 'Archive ticket' ) } variant="subtle" disabled={ busy } onClick={ () => { void toggle( ticket ); } }>{ ticket.archived ? <ArchiveRestore size={ 18 } /> : <Archive size={ 18 } /> }</ActionIcon></Tooltip></Group> ) }</Stack></Modal>;
 }

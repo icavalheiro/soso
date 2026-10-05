@@ -9,6 +9,7 @@ import { ActionIcon, Avatar, Badge, Group, Progress, Tooltip } from '@mantine/co
 import { Plus, Check, CheckSquare, MessageSquare, CalendarDays, GripVertical } from 'lucide-react';
 import { imageUrl, tags } from './api';
 import type { BoardData, Column, Ticket } from './api';
+import { useLanguage } from './language';
 
 export function Kanban ( { data, tickets, onOpen, onCreate, onMove }: { data: BoardData; tickets: Ticket[]; onOpen: ( ticket: Ticket ) => void; onCreate: ( column: string ) => void; onMove: ( ticket: Ticket, columnId: string, position: number ) => Promise<void>; } )
 {
@@ -47,19 +48,21 @@ export function Kanban ( { data, tickets, onOpen, onCreate, onMove }: { data: Bo
 
 function BoardColumn ( { column, index, tickets, data, onOpen, onCreate }: { column: Column; index: number; tickets: Ticket[]; data: BoardData; onOpen: ( ticket: Ticket ) => void; onCreate: ( column: string ) => void; } )
 {
+    const { t } = useLanguage();
     const { setNodeRef, isOver } = useDroppable( { id: column.id } );
     return <section ref={ setNodeRef } className={ `kanban-column ${ isOver ? 'drop-target' : '' }` }>
-        <header className="column-header"><span className={ `column-dot dot-${ index % 5 }` } /><h2>{ column.name }</h2><span className="column-count">{ tickets.length }</span><Tooltip label="Add ticket"><ActionIcon variant="subtle" color="gray" aria-label={ `Add ticket to ${ column.name }` } size="sm" onClick={ () => { onCreate( column.id ); } }><Plus size={ 16 } /></ActionIcon></Tooltip></header>
-        <div className="column-body"><SortableContext items={ tickets.map( ticket => ticket.id ) } strategy={ verticalListSortingStrategy }>{ tickets.map( ticket => <SortableTicket key={ ticket.id } ticket={ ticket } data={ data } onOpen={ onOpen } /> ) }</SortableContext>{ tickets.length === 0 && <div className="column-empty">No tickets</div> }<button className="add-ticket" onClick={ () => { onCreate( column.id ); } }><Plus size={ 14 } /> Add ticket</button></div>
+        <header className="column-header"><span className={ `column-dot dot-${ index % 5 }` } /><h2>{ column.name }</h2><span className="column-count">{ tickets.length }</span><Tooltip label={ t( 'Add ticket' ) }><ActionIcon variant="subtle" color="gray" aria-label={ `${ t( 'Add ticket' ) }: ${ column.name }` } size="sm" onClick={ () => { onCreate( column.id ); } }><Plus size={ 16 } /></ActionIcon></Tooltip></header>
+        <div className="column-body"><SortableContext items={ tickets.map( ticket => ticket.id ) } strategy={ verticalListSortingStrategy }>{ tickets.map( ticket => <SortableTicket key={ ticket.id } ticket={ ticket } data={ data } onOpen={ onOpen } /> ) }</SortableContext>{ tickets.length === 0 && <div className="column-empty">{ t( 'No tickets' ) }</div> }<button className="add-ticket" onClick={ () => { onCreate( column.id ); } }><Plus size={ 14 } /> { t( 'Add ticket' ) }</button></div>
     </section>;
 }
 
 function SortableTicket ( { ticket, data, onOpen }: { ticket: Ticket; data: BoardData; onOpen: ( ticket: Ticket ) => void; } )
 {
+    const { t } = useLanguage();
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable( { id: ticket.id } );
     return <article ref={ setNodeRef } style={ { transform: CSS.Transform.toString( transform ), transition, opacity: isDragging ? 0.25 : 1 } } className={ `ticket priority-${ ticket.priority }` }>
-        <button className="ticket-open" onClick={ () => { onOpen( ticket ); } } aria-label={ `Open ticket: ${ ticket.title }` }><TicketContent ticket={ ticket } data={ data } /></button>
-        <Tooltip label="Move ticket"><button className="drag-handle" aria-label={ `Move ticket: ${ ticket.title }` } { ...attributes } { ...listeners }><GripVertical size={ 14 } /></button></Tooltip>
+        <button className="ticket-open" onClick={ () => { onOpen( ticket ); } } aria-label={ `${ t( 'Open ticket' ) }: ${ ticket.title }` }><TicketContent ticket={ ticket } data={ data } /></button>
+        <Tooltip label={ t( 'Move ticket' ) }><button className="drag-handle" aria-label={ `${ t( 'Move ticket' ) }: ${ ticket.title }` } { ...attributes } { ...listeners }><GripVertical size={ 14 } /></button></Tooltip>
     </article>;
 }
 

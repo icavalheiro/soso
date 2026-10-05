@@ -7,6 +7,7 @@ import '@mantine/notifications/styles.css';
 import '@fontsource-variable/dm-sans';
 import './styles.css';
 import App from './Workspace.tsx';
+import { LanguageProvider } from './language';
 
 const theme = createTheme( {
   fontFamily: 'DM Sans Variable, sans-serif', primaryColor: 'wood', primaryShade: 7, autoContrast: true, defaultRadius: 6,
@@ -20,7 +21,7 @@ createRoot( document.getElementById( 'root' )! ).render(
   <StrictMode>
     <MantineProvider theme={ theme } defaultColorScheme="auto">
       <Notifications position="bottom-right" />
-      <App />
+      <LanguageProvider><App /></LanguageProvider>
     </MantineProvider>
   </StrictMode>,
 );

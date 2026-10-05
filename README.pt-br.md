@@ -6,10 +6,11 @@
 
 <p align="center">
   <img src="https://flagcdn.com/w40/br.png" width="28" alt="Bandeira do Brasil" />
+  <span>Made in brazil.</span>
 </p>
 
 <p align="center">
-  <a href="README.md">🇺🇸 English</a> | <a href="README.pt-br.md">🇧🇷 Português (Brasil)</a>
+  <a href="README.md">🇺🇸 English</a> | <a href="README.pt-br.md">🇧🇷 Português (Brasil)</a> | <a href="README.es-mx.md">🇲🇽 Español (México)</a>
   <br /><br />
   <img src="https://img.shields.io/badge/C%23-512BD4?logo=sharp&logoColor=white" alt="C#" />
   <img src="https://img.shields.io/badge/ASP.NET_Core-512BD4?logo=dotnet&logoColor=white" alt="ASP.NET Core" />
@@ -26,7 +27,7 @@ Um espaço kanban leve para desenvolvimento de software, preparado para LLMs e M
 - Etiquetas integradas: Bug, Feature, Design, Docs, Refactor, Test, Chore e Research.
 - Diálogos de tarefas com descrições, subtarefas, comentários, imagens, responsáveis e prazos.
 - Colunas de conclusão, ações para arquivar/restaurar e visualizações separadas para itens concluídos/arquivados.
-- Navegação recolhível, temas claro/escuro, fotos de perfil e preferências personalizadas privadas.
+- Navegação recolhível, temas claro/escuro, inglês, português brasileiro e espanhol mexicano, fotos de perfil e preferências personalizadas privadas.
 - Criação de contas, desativação e redefinição de senhas apenas por administradores. Não há cadastro público.
 - Servidor MCP integrado, autenticado e via HTTP Streamable em `/mcp`.
 

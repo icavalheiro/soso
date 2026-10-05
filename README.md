@@ -6,10 +6,11 @@
 
 <p align="center">
   <img src="https://flagcdn.com/w40/br.png" width="28" alt="Bandeira do Brasil" />
+  <span>Made in brazil.</span>
 </p>
 
 <p align="center">
-  <a href="README.md">🇺🇸 English</a> | <a href="README.pt-br.md">🇧🇷 Português (Brasil)</a>
+  <a href="README.md">🇺🇸 English</a> | <a href="README.pt-br.md">🇧🇷 Português (Brasil)</a> | <a href="README.es-mx.md">🇲🇽 Español (México)</a>
   <br /><br />
   <img src="https://img.shields.io/badge/C%23-512BD4?logo=sharp&logoColor=white" alt="C#" />
   <img src="https://img.shields.io/badge/ASP.NET_Core-512BD4?logo=dotnet&logoColor=white" alt="ASP.NET Core" />
@@ -26,7 +27,7 @@ A lightweight, llm/mcp friendly, software-development kanban workspace built wit
 - Built-in Bug, Feature, Design, Docs, Refactor, Test, Chore and Research tags.
 - Ticket dialogs with descriptions, subtasks, comments, images, assignees and due dates.
 - Done columns, archive/restore actions and separate completed/archived views.
-- Collapsible navigation, light/dark themes, profile photos and private custom preferences.
+- Collapsible navigation, light/dark themes, English, Brazilian Portuguese and Mexican Spanish, profile photos and private custom preferences.
 - Administrator-only account creation, disabling and password resets. No public sign-up.
 - Authenticated built-in Streamable HTTP MCP server at `/mcp`.
 
