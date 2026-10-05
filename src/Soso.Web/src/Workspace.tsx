@@ -250,7 +250,7 @@ export default function Workspace ()
 
     return <div className={ `app-shell ${ collapsed ? 'is-collapsed' : '' }` }>
         <aside className="sidebar" id="workspace-sidebar" aria-label={ t( 'Workspace navigation' ) }>
-            <div className="brand"><img src="/logo.jpg" alt="Sosô" /><strong>Sosô<span>{ t( 'Organizando tua vida :D' ) }</span></strong></div>
+            <div className="brand"><img src="/logo.jpg" alt="Sosô" /><strong>Sosô<span>{ t( 'Organizing your life :D' ) }</span></strong></div>
             <div className="sidebar-heading"><span>{ t( 'BOARDS' ) }</span><IconButton label={ t( 'Create board' ) } onClick={ () => { setBoardModal( 'create' ); } }><Plus size={ 17 } /></IconButton></div>
             <nav className="board-nav">{ boards.map( board => <button key={ board.id } className={ `board-link ${ board.id === activeId ? 'active' : '' }` } aria-current={ board.id === activeId ? 'page' : undefined } onClick={ () => { selectBoard( board.id ); } }><BoardIcon icon={ board.icon } color={ board.color } /><span>{ board.name }</span></button> ) }</nav>
             <div className="sidebar-bottom">

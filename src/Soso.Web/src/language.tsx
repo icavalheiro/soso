@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 export type Language = 'en' | 'pt-BR' | 'es-MX';
 
 const translations: Record<string, string> = {
-    'Organizando tua vida :D': 'Organizando sua vida :D', 'Boards': 'Quadros', 'What needs to happen?': 'O que precisa ser feito?',
+    'Organizing your life :D': 'Organizando tua vida :D', 'Boards': 'Quadros', 'What needs to happen?': 'O que precisa ser feito?',
     'Workspace navigation': 'Navegação do espaço de trabalho', 'Create board': 'Criar quadro', 'BOARDS': 'QUADROS',
     'Accounts': 'Contas', 'Profile & settings': 'Perfil e configurações', 'Open profile': 'Abrir perfil',
     'Administrator': 'Administrador', 'Member': 'Membro', 'Expand sidebar': 'Expandir barra lateral', 'Collapse sidebar': 'Recolher barra lateral',
@@ -33,7 +33,7 @@ const translations: Record<string, string> = {
 };
 
 const spanishTranslations: Record<string, string> = {
-    'Organizando tua vida :D': 'Organiza tu vida :D', 'Boards': 'Tableros', 'What needs to happen?': '¿Qué hay que hacer?',
+    'Organizing your life :D': 'Organiza tu vida :D', 'Boards': 'Tableros', 'What needs to happen?': '¿Qué hay que hacer?',
     'Workspace navigation': 'Navegación del espacio de trabajo', 'Create board': 'Crear tablero', 'BOARDS': 'TABLEROS',
     'Accounts': 'Cuentas', 'Profile & settings': 'Perfil y configuración', 'Open profile': 'Abrir perfil',
     'Administrator': 'Administrador', 'Member': 'Miembro', 'Expand sidebar': 'Expandir barra lateral', 'Collapse sidebar': 'Contraer barra lateral',
