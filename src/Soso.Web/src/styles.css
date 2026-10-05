@@ -852,8 +852,8 @@ button:focus-visible {
         flex: 1;
     }
     .board-heading {
-        padding: 10px 12px;
-        gap: 8px;
+        padding: 8px 12px;
+        gap: 4px 8px;
     }
     .board-heading h1 {
         font-size: 18px;
