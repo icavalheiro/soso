@@ -85,7 +85,7 @@ export function TicketModal ( { ticket, data, account, onClose, onChange, onDele
             <fieldset className="ticket-fieldset" disabled={ busy }>
                 <TextInput aria-label="Ticket title" className="ticket-title-input" required maxLength={ 160 } value={ draft.title } onChange={ event => { setDraft( { ...draft, title: event.currentTarget.value } ); } } />
                 <div className="ticket-editor-grid"><div className="ticket-editor-main"><Stack gap="lg">
-                    <MultiSelect label={ t( 'Tags' ) } value={ draft.tags } onChange={ tags => { setDraft( { ...draft, tags } ); } } data={ tags.map( tag => ( { value: tag.value, label: t( tag.label ) } ) ) } searchable />
+                    <MultiSelect label={ t( 'Tags' ) } value={ draft.tags } onChange={ tags => { setDraft( { ...draft, tags } ); } } data={ tags.map( tag => ( { value: tag.value, label: tag.label } ) ) } searchable />
                     <section aria-label={ t( 'Description' ) }>
                         <Group justify="space-between" mb="sm">
                             <Text size="sm" fw={ 600 }>{ t( 'Description' ) }</Text>

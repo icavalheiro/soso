@@ -209,6 +209,23 @@ test( 'login, software tags and assignee filters', async ( { page } ) =>
     await expect( page.locator( '.ticket' ) ).toHaveCount( 1 );
 } );
 
+test( 'ticket tag names stay in English in the localized editor', async ( { page } ) =>
+{
+    await installApiMock( page );
+    await page.goto( '/' );
+    await page.getByRole( 'button', { name: 'Choose language', exact: true } ).click();
+    await page.getByRole( 'button', { name: /Español \(México\)/ } ).click();
+    await page.locator( '.ticket' ).filter( { hasText: 'Sketch the board layout' } ).getByRole( 'button', { name: /Abrir tarea: Sketch the board layout/ } ).click();
+
+    const dialog = page.getByRole( 'dialog' );
+    await expect( dialog.getByText( 'Etiquetas', { exact: true } ) ).toBeVisible();
+    await expect( dialog.locator( '.mantine-MultiSelect-pill' ) ).toHaveText( 'Design' );
+    await dialog.getByRole( 'combobox', { name: 'Etiquetas' } ).click();
+    await expect( page.getByRole( 'option', { name: 'Bug', exact: true } ) ).toBeVisible();
+    await expect( page.getByRole( 'option', { name: 'Feature', exact: true } ) ).toBeVisible();
+    await expect( page.getByRole( 'option', { name: 'Error', exact: true } ) ).toHaveCount( 0 );
+} );
+
 for ( const width of [ 1366, 390 ] )
 {
     test( `ticket search matches IDs at ${ width }px`, async ( { page } ) =>
