@@ -1,0 +1,19 @@
+{
+  "inputs": [
+    {
+      "id": "soso-token",
+      "type": "promptString",
+      "description": "Sosô MCP token from your profile",
+      "password": true
+    }
+  ],
+  "servers": {
+    "soso": {
+      "type": "http",
+      "url": "https://soso.example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${input:soso-token}"
+      }
+    }
+  }
+}
