@@ -9,7 +9,7 @@ import { ActionIcon, Avatar, Badge, Group, Progress, Tooltip } from '@mantine/co
 import { Plus, Check, CheckSquare, MessageSquare, CalendarDays, GripVertical } from 'lucide-react';
 import { imageUrl, tags } from './api';
 import type { BoardData, Column, Ticket } from './api';
-import { useLanguage } from './language';
+import { useLanguage } from './useLanguage';
 
 export function Kanban ( { data, tickets, onOpen, onCreate, onMove }: { data: BoardData; tickets: Ticket[]; onOpen: ( ticket: Ticket ) => void; onCreate: ( column: string ) => void; onMove: ( ticket: Ticket, columnId: string, position: number ) => Promise<void>; } )
 {

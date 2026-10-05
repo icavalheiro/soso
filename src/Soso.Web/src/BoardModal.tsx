@@ -5,7 +5,7 @@ import { api, newId } from './api';
 import type { Board, Column, Person } from './api';
 import { reportError } from './feedback';
 import { BoardColorPicker, BoardIconPicker } from './BoardIcon';
-import { useLanguage } from './language';
+import { useLanguage } from './useLanguage';
 
 export function BoardModal ( { board, onClose, onSave, onDelete }: { board?: Board; onClose: () => void; onSave: ( board: Board ) => void; onDelete: ( id: string ) => void; } )
 {

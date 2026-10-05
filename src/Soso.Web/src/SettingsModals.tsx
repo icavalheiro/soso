@@ -5,7 +5,7 @@ import { api, imageUrl } from './api';
 import type { Account, Board, Token } from './api';
 import { reportError } from './feedback';
 import { AvatarCropModal } from './AvatarCropModal';
-import { useLanguage } from './language';
+import { useLanguage } from './useLanguage';
 
 function TokenBoardAccess ( { token, boards, busy, onSave, onRevoke }: { token: Token; boards: Board[]; busy: boolean; onSave: ( boardIds: string[] ) => void; onRevoke: () => void; } )
 {

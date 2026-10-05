@@ -6,7 +6,7 @@ import { Archive, ArchiveRestore, CheckSquare, Eye, ImagePlus, MessageSquare, Pe
 import { api, imageUrl, newId, ticketBody, tags } from './api';
 import type { Account, BoardData, Ticket } from './api';
 import { reportError } from './feedback';
-import { useLanguage } from './language';
+import { useLanguage } from './useLanguage';
 
 export function TicketModal ( { ticket, data, account, onClose, onChange, onDelete }: { ticket: Ticket; data: BoardData; account: Account; onClose: () => void; onChange: ( ticket: Ticket ) => void; onDelete: ( id: string ) => void; } )
 {

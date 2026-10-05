@@ -4,7 +4,7 @@ import { Archive, ArchiveRestore, Search } from 'lucide-react';
 import { api, ticketBody } from './api';
 import type { BoardData, Ticket } from './api';
 import { reportError } from './feedback';
-import { useLanguage } from './language';
+import { useLanguage } from './useLanguage';
 
 export function ArchiveModal ( { data, onClose, onOpen, onChange }: { data: BoardData; onClose: () => void; onOpen: ( ticket: Ticket ) => void; onChange: ( ticket: Ticket ) => void; } )
 {

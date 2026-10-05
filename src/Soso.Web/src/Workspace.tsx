@@ -5,7 +5,7 @@ import { api, ApiError, refreshCsrf, imageUrl, ticketBody, tags } from './api';
 import type { Account, Board, BoardData, Ticket } from './api';
 import { reportError } from './feedback';
 import { BoardIcon } from './BoardIcon';
-import { useLanguage } from './language';
+import { useLanguage } from './useLanguage';
 const Kanban = lazy( () => import( './Kanban' ).then( module => ( { default: module.Kanban } ) ) );
 const TicketModal = lazy( () => import( './TicketModal' ).then( module => ( { default: module.TicketModal } ) ) );
 const BoardModal = lazy( () => import( './BoardModal' ).then( module => ( { default: module.BoardModal } ) ) );

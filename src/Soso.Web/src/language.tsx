@@ -1,7 +1,6 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-
-export type Language = 'en' | 'pt-BR' | 'es-MX';
+import { LanguageContext, type Language } from './language-context';
 
 const translations: Record<string, string> = {
     'Organizing your life :D': 'Organizando tua vida :D', 'Boards': 'Quadros', 'What needs to happen?': 'O que precisa ser feito?',
@@ -61,8 +60,6 @@ const spanishTranslations: Record<string, string> = {
     'Language': 'Idioma', 'English': 'English', 'Português (Brasil)': 'Português (Brasil)', 'Español (México)': 'Español (México)', 'Choose language': 'Elegir idioma', 'Photo zoom': 'Zoom de la foto',
 };
 
-const LanguageContext = createContext<{ language: Language; setLanguage: ( language: Language ) => void; t: ( text: string ) => string; } | null>( null );
-
 export function LanguageProvider ( { children }: { children: ReactNode; } )
 {
     const [ language, setLanguageState ] = useState<Language>( () =>
@@ -79,14 +76,4 @@ export function LanguageProvider ( { children }: { children: ReactNode; } )
     }
     const t = ( text: string ) => language === 'pt-BR' ? translations[ text ] ?? text : language === 'es-MX' ? spanishTranslations[ text ] ?? text : text;
     return <LanguageContext.Provider value={ { language, setLanguage, t } }>{ children }</LanguageContext.Provider>;
-}
-
-export function useLanguage ()
-{
-    const context = useContext( LanguageContext );
-    if ( !context )
-    {
-        throw new Error( 'useLanguage must be used within LanguageProvider' );
-    }
-    return context;
 }
