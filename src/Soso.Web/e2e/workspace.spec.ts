@@ -193,7 +193,7 @@ test( 'login, software tags and assignee filters', async ( { page } ) =>
     await page.getByLabel( 'Email' ).fill( 'maya@example.test' );
     await page.getByRole( 'textbox', { name: /^Password/ } ).fill( 'Test-only-browser-password!' );
     await page.getByRole( 'button', { name: 'Sign in', exact: true } ).click();
-    await expect( page.locator( '.brand strong' ) ).toHaveText( 'SosôOrganizando tua vida :D' );
+    await expect( page.locator( '.brand strong' ) ).toHaveText( 'SosôOrganizing your life :D' );
     await expect( page.locator( '.workspace-label' ) ).toHaveText( 'Sosô' );
     await expect( page.locator( '.ticket' ) ).toHaveCount( 4 );
     await page.getByRole( 'button', { name: 'Filters', exact: true } ).click();
@@ -371,7 +371,7 @@ for ( const width of [ 1366, 390 ] )
             await expect( page.locator( '.sidebar' ) ).toBeHidden();
             await page.getByRole( 'button', { name: 'Expand sidebar', exact: true } ).click();
         }
-        await expect( page.locator( '.brand span' ) ).toHaveText( 'Organizando tua vida :D' );
+        await expect( page.locator( '.brand span' ) ).toHaveText( 'Organizing your life :D' );
         await expect( page.locator( '.sidebar' ) ).toBeVisible();
         await page.screenshot( { path: testInfo.outputPath( 'sidebar-expanded.png' ) } );
         await page.getByRole( 'button', { name: 'Collapse sidebar', exact: true } ).click();

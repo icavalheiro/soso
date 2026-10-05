@@ -9,3 +9,4 @@
 - Preserve secure cookies and require TLS in production. Never add self-registration.
 - Build backend: dotnet build src/Soso.Api/Soso.Api.csproj.
 - Build frontend: npm --prefix src/Soso.Web run build.
+- Before considering a task complete, run `make verify` from the repository root. It runs the same verification checks as GitHub Actions; report any failures or environment blockers rather than treating the task as fully verified.
