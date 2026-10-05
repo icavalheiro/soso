@@ -170,6 +170,7 @@ app.Use(async (context, next) =>
     }
     await next();
 });
+app.UseMiddleware<ModificationAuditMiddleware>();
 app.MapAccounts();
 app.MapBoards();
 app.MapMcp("/mcp").RequireAuthorization("Mcp");
