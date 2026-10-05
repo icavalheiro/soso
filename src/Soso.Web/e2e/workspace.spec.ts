@@ -559,6 +559,36 @@ test( 'ticket subtasks, comments and images', async ( { page } ) =>
     await expect( page.locator( '.ticket' ).filter( { hasText: 'Sketch the board layout' } ) ).toContainText( '1/1' );
 } );
 
+test( 'tickets without descriptions open after switching boards', async ( { page } ) =>
+{
+    const state = await installApiMock( page );
+    const ticket = state.data.tickets[ 0 ];
+    Reflect.deleteProperty( ticket, 'description' );
+    const otherBoard = {
+        ...structuredClone( state.data ),
+        board: { ...structuredClone( state.data.board ), id: 'board-other', name: 'Another board' },
+        tickets: [],
+    };
+    const failures: string[] = [];
+    page.on( 'pageerror', error => { failures.push( error.message ); } );
+    await page.route( '**/api/boards', route => route.fulfill( { json: [ state.data.board, otherBoard.board ] } ) );
+    await page.route( '**/api/boards/board-other', route => route.fulfill( { json: otherBoard } ) );
+
+    await page.goto( '/' );
+    const openTicket = page.getByRole( 'button', { name: 'Open ticket: Sketch the board layout', exact: true } );
+    await openTicket.click();
+    await expect( page.getByRole( 'dialog' ) ).toContainText( 'No description' );
+    await page.keyboard.press( 'Escape' );
+
+    await page.getByRole( 'button', { name: 'Another board', exact: true } ).click();
+    await expect( page.getByRole( 'heading', { name: 'Another board', exact: true } ) ).toBeVisible();
+    await page.getByRole( 'button', { name: 'Soso development', exact: true } ).click();
+    await expect( page.getByRole( 'heading', { name: 'Soso development', exact: true } ) ).toBeVisible();
+    await openTicket.click();
+    await expect( page.getByRole( 'dialog' ) ).toContainText( 'No description' );
+    expect( failures ).toEqual( [] );
+} );
+
 test( 'completed and archived tasks can be archived and restored', async ( { page } ) =>
 {
     await installApiMock( page );

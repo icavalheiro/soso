@@ -151,23 +151,14 @@ Las sesiones del navegador usan cookies HttpOnly, Secure y SameSite=Strict, venc
 
 Las rutas anónimas se limitan al inicio de sesión, la inicialización de CSRF, una respuesta mínima de estado y los recursos estáticos de la aplicación. Los recursos estáticos no contienen datos privados de tableros. Las personas con sesión iniciada pueden ver el directorio de nombres y avatares del equipo para compartir tableros; los correos y la configuración personal no se exponen allí.
 
-```cmd
-dotnet test tests/Soso.Api.Tests/Soso.Api.Tests.csproj
-npm --prefix src/Soso.Web run build
-npm --prefix src/Soso.Web run lint
-dotnet list src/Soso.Api/Soso.Api.csproj package --vulnerable --include-transitive
-npm --prefix src/Soso.Web audit
-```
-
-Las pruebas de interacción del navegador usan una API simulada, independiente de las pruebas de integración de la API real:
+Ejecuta todas las verificaciones en un entorno Docker Linux fijo (también en Windows con Docker Desktop):
 
 ```cmd
-cd src/Soso.Web
-npx playwright install chromium
-npm run test:e2e
+docker build -f tests.Dockerfile -t soso-tests .
+docker run --rm soso-tests
 ```
 
-Cubren el inicio de sesión, las etiquetas, los filtros por responsable y búsqueda, el arrastre entre columnas y sus animaciones, listas de tareas, comentarios e imágenes, archivar/restaurar, pantallas de cuentas y diseños de escritorio/móvil en temas claro/oscuro. Las capturas y trazas de fallos se guardan en `src/Soso.Web/test-results`. CI ejecuta ambas suites y compila la imagen de producción.
+El objetivo `make verify` ejecuta esta imagen de pruebas y luego compila la imagen de producción. Las pruebas de interacción del navegador usan una API simulada, independiente de las pruebas de integración de la API real; cubren inicio de sesión, etiquetas, filtros por responsable/búsqueda, arrastre entre columnas y animaciones, listas, comentarios e imágenes, archivar/restaurar, pantallas de cuentas y diseños de escritorio/móvil en temas claro/oscuro. CI usa el mismo objetivo.
 
 Las pruebas cubren el acceso anónimo, CSRF, cuentas exclusivas para administradores, aislamiento entre tableros, revisiones, etiquetas, archivo, validación de imágenes, invalidación de sesiones, bloqueo, llamadas autenticadas a herramientas MCP y rechazo de encabezados de esquema/IP de cliente reenviados desde pares no confiables. El alojamiento público requiere además actualizaciones del host, monitoreo, respaldos, gestión de secretos, actualizaciones de dependencias y revisión de seguridad humana. Ninguna aplicación puede garantizar seguridad incondicional.
 

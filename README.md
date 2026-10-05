@@ -151,23 +151,14 @@ Browser sessions use HttpOnly, Secure, SameSite=Strict cookies, 12-hour expiry a
 
 Anonymous routes are limited to login, CSRF bootstrap, a minimal health response and static application assets. Static assets contain no private board data. Logged-in users can see the team name/avatar directory for board sharing; email and personal settings are not exposed there.
 
-```cmd
-dotnet test tests/Soso.Api.Tests/Soso.Api.Tests.csproj
-npm --prefix src/Soso.Web run build
-npm --prefix src/Soso.Web run lint
-dotnet list src/Soso.Api/Soso.Api.csproj package --vulnerable --include-transitive
-npm --prefix src/Soso.Web audit
-```
-
-Browser interaction tests use a simulated API, separate from the real API integration tests:
+Run all verification tests in the pinned Linux Docker environment (also on Windows with Docker Desktop):
 
 ```cmd
-cd src/Soso.Web
-npx playwright install chromium
-npm run test:e2e
+docker build -f tests.Dockerfile -t soso-tests .
+docker run --rm soso-tests
 ```
 
-They cover login, software tags, assignee/search filters, cross-column dragging and animation, checklist/comments/images, archive/restore, account screens and desktop/mobile light/dark layouts. Screenshots and failure traces are stored under `src/Soso.Web/test-results`. CI runs both suites and builds the production image.
+The `make verify` target runs this test image and then builds the production image. Browser interaction tests use a simulated API, separate from the real API integration tests; they cover login, software tags, assignee/search filters, cross-column dragging and animation, checklist/comments/images, archive/restore, account screens and desktop/mobile light/dark layouts. CI uses the same target.
 
 Tests cover anonymous access, CSRF, administrator-only accounts, cross-board isolation, revisions, tags, archive, image validation, session invalidation, lockout, authenticated MCP tool calls and rejection of forwarded scheme/client-IP headers from untrusted peers. Public hosting still requires host patching, monitoring, backups, secret management, dependency updates and human security review. No application can promise unconditional security.
 

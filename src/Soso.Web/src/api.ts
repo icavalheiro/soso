@@ -76,7 +76,7 @@ export function newId ()
 export function ticketBody ( ticket: Ticket )
 {
     const { title, description, columnId, priority, assigneeId, dueDate, position, subtasks, tags, archived, revision } = ticket;
-    return { title, description, columnId, priority, assigneeId, dueDate, position, subtasks, tags, archived, revision };
+    return { title, description: description ?? '', columnId, priority, assigneeId, dueDate, position, subtasks, tags, archived, revision };
 }
 
 export const tags = [

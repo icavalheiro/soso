@@ -151,23 +151,14 @@ As sessões do navegador usam cookies HttpOnly, Secure e SameSite=Strict, expira
 
 As rotas anônimas se limitam ao login, inicialização CSRF, uma resposta mínima de saúde e recursos estáticos da aplicação. Os recursos estáticos não contêm dados privados dos quadros. Usuários autenticados podem ver o nome e avatar da equipe para compartilhar quadros; e-mails e configurações pessoais não são expostos nessa área.
 
-```cmd
-dotnet test tests/Soso.Api.Tests/Soso.Api.Tests.csproj
-npm --prefix src/Soso.Web run build
-npm --prefix src/Soso.Web run lint
-dotnet list src/Soso.Api/Soso.Api.csproj package --vulnerable --include-transitive
-npm --prefix src/Soso.Web audit
-```
-
-Os testes de interação do navegador usam uma API simulada, separada dos testes de integração com a API real:
+Execute toda a verificação de testes em um ambiente Docker Linux fixo (também no Windows com Docker Desktop):
 
 ```cmd
-cd src/Soso.Web
-npx playwright install chromium
-npm run test:e2e
+docker build -f tests.Dockerfile -t soso-tests .
+docker run --rm soso-tests
 ```
 
-Eles cobrem login, etiquetas de software, filtros por responsável/busca, arrastar entre colunas e animações, listas de verificação/comentários/imagens, arquivamento/restauração, telas de contas e layouts para desktop/celular nos temas claro/escuro. Capturas de tela e traces de falha são armazenados em `src/Soso.Web/test-results`. O CI executa as duas suítes e compila a imagem de produção.
+O alvo `make verify` executa essa imagem de testes e depois compila a imagem de produção. Os testes de interação do navegador usam uma API simulada, separada dos testes de integração com a API real; eles cobrem login, etiquetas de software, filtros por responsável/busca, arrastar entre colunas e animações, listas de verificação/comentários/imagens, arquivamento/restauração, telas de contas e layouts para desktop/celular nos temas claro/escuro. O CI usa o mesmo alvo.
 
 Os testes cobrem acesso anônimo, CSRF, contas exclusivas de administradores, isolamento entre quadros, revisões, etiquetas, arquivamento, validação de imagens, invalidação de sessões, bloqueio, chamadas autenticadas a ferramentas MCP e rejeição de cabeçalhos encaminhados de esquema/IP de cliente vindos de peers não confiáveis. A hospedagem pública ainda exige atualização do host, monitoramento, backups, gerenciamento de segredos, atualização de dependências e análise humana de segurança. Nenhuma aplicação pode prometer segurança incondicional.
 
