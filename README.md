@@ -4,6 +4,19 @@
   <img src="logo.jpg" alt="Logo do Sosô" width="240" />
 </p>
 
+<p align="center">
+  <img src="https://flagcdn.com/w40/br.png" width="28" alt="Bandeira do Brasil" />
+</p>
+
+<p align="center">
+  <a href="README.md">🇺🇸 English</a> | <a href="README.pt-br.md">🇧🇷 Português (Brasil)</a>
+  <br /><br />
+  <img src="https://img.shields.io/badge/C%23-512BD4?logo=sharp&logoColor=white" alt="C#" />
+  <img src="https://img.shields.io/badge/ASP.NET_Core-512BD4?logo=dotnet&logoColor=white" alt="ASP.NET Core" />
+  <img src="https://img.shields.io/badge/LiteDB-2C3E50?logo=databricks&logoColor=white" alt="LiteDB" />
+  <img src="https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white" alt="TypeScript" />
+</p>
+
 A lightweight, llm/mcp friendly, software-development kanban workspace built with ASP.NET Core 10 minimal APIs, LiteDB, React, TypeScript, Vite and Mantine.
 
 ## Workspace
