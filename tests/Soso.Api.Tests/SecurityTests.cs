@@ -163,6 +163,9 @@ public sealed class SecurityTests
             var legacy = service.CreateTicket(board.Id, new("Browser client", column), user);
             Assert.Empty(legacy.Description);
             Assert.Empty(legacy.Tags);
+            var assigned = service.CreateTicket(board.Id, new("Assigned to creator", column, AssigneeId: BoardService.UserId(user)), user);
+            Assert.Equal(BoardService.UserId(user), assigned.AssigneeId);
+            Assert.Equal(400, Assert.Throws<ApiException>(() => service.CreateTicket(board.Id, new("Invalid assignee", column, AssigneeId: "outsider"), user)).Status);
         });
     }
 

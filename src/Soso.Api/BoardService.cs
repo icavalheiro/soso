@@ -123,14 +123,19 @@ public sealed class BoardService(Store store)
             ValidateInput(request);
             var board = RequireBoard(boardId, user);
             CheckColumn(board, request.ColumnId);
+            var validAssignee = request.AssigneeId is null || request.AssigneeId == board.OwnerId || board.Members.Contains(request.AssigneeId);
             var tags = request.Tags ?? [];
             var validTags = tags.All(AllowedTags.Contains);
+            if (!validAssignee)
+            {
+                throw new ApiException(400, "Invalid ticket assignee.");
+            }
             if (!validTags)
             {
                 throw new ApiException(400, "Tags must classify software work: bug, feature, design, docs, refactor, test, chore or research.");
             }
             var position = store.Tickets.Find(ticket => ticket.BoardId == boardId).Select(ticket => ticket.Position).DefaultIfEmpty(0).Max() + 1024;
-            var ticket = new Ticket { BoardId = boardId, ColumnId = request.ColumnId, Title = Text(request.Title, 160), Description = request.Description?.Trim() ?? "", Tags = tags.Distinct().ToList(), Position = position };
+            var ticket = new Ticket { BoardId = boardId, ColumnId = request.ColumnId, Title = Text(request.Title, 160), Description = request.Description?.Trim() ?? "", Tags = tags.Distinct().ToList(), AssigneeId = request.AssigneeId, Position = position };
             store.Tickets.Insert(ticket);
             return ticket;
         }

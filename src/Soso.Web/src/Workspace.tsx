@@ -195,7 +195,7 @@ export default function Workspace ()
         try
         {
             setBusy( true );
-            const ticket = await api<Ticket>( `/boards/${ activeId }/tickets`, 'POST', { title, columnId: newColumn } );
+            const ticket = await api<Ticket>( `/boards/${ activeId }/tickets`, 'POST', { title, columnId: newColumn, assigneeId: account?.id } );
             setData( previous => previous ? { ...previous, tickets: [ ...previous.tickets, ticket ] } : previous );
             setTitle( '' ); setNewColumn( null ); setSelected( ticket );
         }

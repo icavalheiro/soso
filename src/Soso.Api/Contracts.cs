@@ -26,7 +26,7 @@ public sealed record UpdateBoardRequest([Required, MaxLength(80)] string Name, [
 /// <summary>Column definition.</summary>
 public sealed record ColumnRequest([Required, MaxLength(32)] string Id, [Required, MaxLength(60)] string Name, bool IsDone);
 /// <summary>New ticket in a board column.</summary>
-public sealed record CreateTicketRequest([Required, MaxLength(160)] string Title, [Required, MaxLength(32)] string ColumnId, [MaxLength(12000)] string? Description = null, [MaxLength(8)] string[]? Tags = null);
+public sealed record CreateTicketRequest([Required, MaxLength(160)] string Title, [Required, MaxLength(32)] string ColumnId, [MaxLength(12000)] string? Description = null, [MaxLength(8)] string[]? Tags = null, string? AssigneeId = null);
 public sealed record McpCreateTicketRequest(
     [Required, MaxLength(160)] string Title,
     [Required, MaxLength(32)] string ColumnId,

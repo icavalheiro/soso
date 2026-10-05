@@ -132,6 +132,13 @@ export async function installApiMock ( page: Page, authenticated = true )
             }
             return reply( state.data );
         }
+        if ( path === `/api/boards/${ state.data.board.id }/tickets` && method === 'POST' )
+        {
+            const input = request.postDataJSON();
+            const ticket = { id: `ticket-${ sequence++ }`, boardId: state.data.board.id, description: '', priority: 'normal', tags: [], archived: false, assigneeId: null, dueDate: null, position: ( state.data.tickets.length + 1 ) * 1024, revision: 0, subtasks: [], comments: [], images: [], ...input };
+            state.data.tickets.push( ticket );
+            return reply( ticket, 201 );
+        }
         if ( path.startsWith( '/api/images/' ) )
         {
             return route.fulfill( { path: 'public/logo.jpg', contentType: 'image/jpeg' } );

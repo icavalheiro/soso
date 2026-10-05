@@ -209,6 +209,18 @@ test( 'login, software tags and assignee filters', async ( { page } ) =>
     await expect( page.locator( '.ticket' ) ).toHaveCount( 1 );
 } );
 
+test( 'new tickets are assigned to the current user', async ( { page } ) =>
+{
+    const state = await installApiMock( page );
+    await page.goto( '/' );
+    await page.getByRole( 'button', { name: 'New ticket', exact: true } ).click();
+    await page.getByRole( 'textbox', { name: 'Title' } ).fill( 'Write release notes' );
+    const creation = page.waitForRequest( request => request.method() === 'POST' && request.url().endsWith( `/boards/${ state.data.board.id }/tickets` ) );
+    await page.getByRole( 'button', { name: 'Create ticket', exact: true } ).click();
+    expect( ( await creation ).postDataJSON() ).toEqual( { title: 'Write release notes', columnId: 'todo', assigneeId: state.account.id } );
+    await expect.poll( () => state.data.tickets.find( ticket => ticket.title === 'Write release notes' )?.assigneeId ).toBe( state.account.id );
+} );
+
 test( 'ticket tag names stay in English in the localized editor', async ( { page } ) =>
 {
     await installApiMock( page );
