@@ -248,7 +248,6 @@ export default function Workspace ()
                 <Group gap={ 6 } wrap="nowrap" className="topbar-title"><IconButton label={ collapsed ? 'Expand sidebar' : 'Collapse sidebar' } onClick={ toggleSidebar } expanded={ !collapsed } controls="workspace-sidebar">{ collapsed ? <PanelLeftOpen size={ 16 } /> : <PanelLeftClose size={ 16 } /> }</IconButton><span className="workspace-label">Sosô</span><span className="separator">/</span>{ data && <BoardIcon icon={ data.board.icon } color={ data.board.color } size={ 14 } /> }<Text className="topbar-board-name" size="xs" fw={ 600 } truncate>{ data?.board.name ?? 'Boards' }</Text>{ data && <Badge className="board-ticket-count" variant="light" color="gray" size="sm">{ filtered.length } { filtered.length === 1 ? 'ticket' : 'tickets' }</Badge> }</Group>
                 <Group gap={ 4 } wrap="nowrap" className="topbar-actions">
                     { data && <TextInput className="topbar-search" aria-label="Search tickets" placeholder="Search cards..." leftSection={ <Search size={ 14 } /> } size="xs" value={ search } onChange={ event => { setSearch( event.currentTarget.value ); } } /> }
-                    <IconButton label="Refresh board" onClick={ () => { void reload(); } }>{ boardLoading ? <Loader size={ 14 } /> : <RefreshCw size={ 15 } /> }</IconButton>
                     { themeButton }
                     <IconButton label="Sign out" onClick={ () => { void api( '/auth/logout', 'POST' ).then( () => { setAccount( null ); setData( null ); setBoards( [] ); } ).catch( reportError ); } }><LogOut size={ 15 } /></IconButton>
                 </Group>
@@ -258,6 +257,7 @@ export default function Workspace ()
                 <Group className="board-actions" gap={ 6 }>
                     <Avatar.Group className="board-avatars">{ data.members.slice( 0, 4 ).map( member => <Tooltip key={ member.id } label={ member.name }><Avatar size={ 24 } radius="xl" src={ imageUrl( member.avatarId ) }>{ member.name.slice( 0, 1 ) }</Avatar></Tooltip> ) }</Avatar.Group>
                     { canManage && <IconButton label="Board settings" onClick={ () => { setBoardModal( 'edit' ); } }><Settings size={ 16 } /></IconButton> }
+                    <IconButton label="Refresh board" onClick={ () => { void reload(); } }>{ boardLoading ? <Loader size={ 14 } /> : <RefreshCw size={ 15 } /> }</IconButton>
                     <Button size="xs" variant={ activeFilters > 0 ? 'light' : 'default' } leftSection={ <SlidersHorizontal size={ 14 } /> } aria-haspopup="dialog" onClick={ () => { setFiltersOpen( true ); } }>Filters{ activeFilters > 0 ? ` (${ activeFilters })` : '' }</Button>
                     <Button size="xs" variant="default" leftSection={ <Archive size={ 14 } /> } onClick={ () => { setArchive( true ); } }>Archive</Button>
                     <Button size="xs" leftSection={ <Plus size={ 14 } /> } onClick={ () => { setNewColumn( data.board.columns[ 0 ].id ); } }>New ticket</Button>
