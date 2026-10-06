@@ -47,7 +47,11 @@ public sealed class DropboxBackupService(Store store, IHttpClientFactory clients
 
     public async Task RunBackupAsync(CancellationToken cancellationToken, bool force = false)
     {
-        if (!await backupGate.WaitAsync(0, cancellationToken))
+        if (force)
+        {
+            await backupGate.WaitAsync(cancellationToken);
+        }
+        else if (!await backupGate.WaitAsync(0, cancellationToken))
         {
             return;
         }
@@ -86,10 +90,17 @@ public sealed class DropboxBackupService(Store store, IHttpClientFactory clients
         catch (Exception exception)
         {
             logger.LogError(exception, "Dropbox backup failed.");
-            store.RecordBackupError(exception is ApiException ? exception.Message : "Dropbox backup failed. Check the connection and server logs.");
+            var message = exception switch
+            {
+                ApiException => exception.Message,
+                HttpRequestException => "Could not connect to Dropbox. Check the server's internet connection and try again.",
+                IOException => "Could not read or create the database backup file. Check the server's data directory and available disk space.",
+                _ => "Dropbox backup failed. Check the server logs for details."
+            };
+            store.RecordBackupError(message);
             if (force)
             {
-                throw;
+                throw exception is ApiException ? exception : new ApiException(502, message);
             }
         }
         finally
@@ -119,7 +130,38 @@ public sealed class DropboxBackupService(Store store, IHttpClientFactory clients
         using var response = await clients.CreateClient().SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            throw new ApiException(502, "Dropbox could not store the backup. Check the app permissions and available Dropbox space.");
+            var detail = await ReadDropboxErrorAsync(response, cancellationToken);
+            var message = response.StatusCode switch
+            {
+                System.Net.HttpStatusCode.Unauthorized => "Dropbox rejected the access token. Reconnect with a valid token.",
+                System.Net.HttpStatusCode.Forbidden => "Dropbox denied the upload. Ensure the app has the files.content.write permission and reconnect after changing permissions.",
+                (System.Net.HttpStatusCode)507 => "Dropbox storage is full. Free up Dropbox space and try again.",
+                _ when detail is not null => $"Dropbox returned HTTP {(int)response.StatusCode}: {detail}",
+                _ => $"Dropbox could not store the backup (HTTP {(int)response.StatusCode}). Check the app permissions and available Dropbox space."
+            };
+            throw new ApiException(502, message);
+        }
+    }
+
+    private static async Task<string?> ReadDropboxErrorAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (string.IsNullOrWhiteSpace(body))
+            {
+                return null;
+            }
+            using var document = JsonDocument.Parse(body);
+            if (document.RootElement.TryGetProperty("error_summary", out var summary) && summary.ValueKind == JsonValueKind.String)
+            {
+                return summary.GetString() is { Length: > 300 } value ? value[..300] : summary.GetString();
+            }
+            return null;
+        }
+        catch (JsonException)
+        {
+            return null;
         }
     }
 

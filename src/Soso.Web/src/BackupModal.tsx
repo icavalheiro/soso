@@ -44,7 +44,7 @@ export function BackupModal ( { onClose }: { onClose: () => void; } )
             const result = await api<BackupStatus>( '/admin/backup', 'PUT', { appKey, accessToken } );
             setStatus( result ); setAccessToken( '' ); setMessage( t( 'Dropbox connected successfully.' ) );
         }
-        catch ( error ) { reportError( error ); }
+        catch ( error ) { setMessage( error instanceof Error ? error.message : t( 'Dropbox connection failed.' ) ); reportError( error ); }
         finally { setBusy( false ); }
     }
 
@@ -57,7 +57,7 @@ export function BackupModal ( { onClose }: { onClose: () => void; } )
             setStatus( { connected: false, appKey: '', lastBackupAt: status?.lastBackupAt ?? null, lastError: null } );
             setAppKey( '' ); setAccessToken( '' ); setMessage( t( 'Dropbox disconnected.' ) );
         }
-        catch ( error ) { reportError( error ); }
+        catch ( error ) { setMessage( error instanceof Error ? error.message : t( 'Dropbox disconnection failed.' ) ); reportError( error ); }
         finally { setBusy( false ); }
     }
 
@@ -69,7 +69,12 @@ export function BackupModal ( { onClose }: { onClose: () => void; } )
             await api( '/admin/backup/run', 'POST' );
             await refresh(); setMessage( t( 'Backup completed.' ) );
         }
-        catch ( error ) { reportError( error ); }
+        catch ( error )
+        {
+            setMessage( error instanceof Error ? error.message : t( 'Backup failed. Check the Dropbox connection and try again.' ) );
+            reportError( error );
+            try { await refresh(); } catch ( refreshError ) { reportError( refreshError ); }
+        }
         finally { setBusy( false ); }
     }
 
