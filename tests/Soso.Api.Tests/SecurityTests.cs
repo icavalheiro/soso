@@ -602,6 +602,9 @@ public sealed class SecurityTests
         using var assigned = await user.PutAsJsonAsync($"/api/auth/tokens/{tokenId}/boards", new { boardIds = new[] { board.Id, board.Id } });
         Assert.Equal(HttpStatusCode.OK, assigned.StatusCode);
         Assert.Single((await assigned.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("boardIds").EnumerateArray());
+        using var persistedAssignments = await user.GetAsync("/api/auth/tokens");
+        var persistedToken = (await persistedAssignments.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray().Single(item => item.GetProperty("id").GetString() == tokenId);
+        Assert.Equal(board.Id, Assert.Single(persistedToken.GetProperty("boardIds").EnumerateArray()).GetString());
         var call = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 3, method = "tools/call", @params = new { name = "list_boards", arguments = new { } } });
         Assert.Equal(HttpStatusCode.OK, call.StatusCode);
         var callBody = await call.Content.ReadAsStringAsync();

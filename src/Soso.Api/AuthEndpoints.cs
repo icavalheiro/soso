@@ -158,8 +158,12 @@ public static class AuthEndpoints
                     service.RequireBoard(boardId, user);
                 }
                 token!.BoardIds = boardIds;
-                store.Tokens.Update(token);
-                return TypedResults.Ok(new { token.Id, token.Name, token.ExpiresAt, token.BoardIds });
+                if (!store.Tokens.Update(token))
+                {
+                    throw new ApiException(500, "Token permissions could not be saved.");
+                }
+                var savedToken = store.Tokens.FindById(id) ?? throw new ApiException(500, "Token permissions could not be saved.");
+                return TypedResults.Ok(new { savedToken.Id, savedToken.Name, savedToken.ExpiresAt, savedToken.BoardIds });
             }
         });
         group.MapDelete("/tokens/{id}", (string id, ClaimsPrincipal user, Store store) =>
