@@ -52,6 +52,7 @@ public sealed class Ticket
     public int Revision { get; set; }
     public List<Subtask> Subtasks { get; set; } = [];
     public List<TicketComment> Comments { get; set; } = [];
+    public List<TicketActivity> Activity { get; set; } = [];
     public List<string> Images { get; set; } = [];
 }
 
@@ -85,4 +86,16 @@ public sealed class AccessToken
     public string Name { get; set; } = "";
     public List<string> BoardIds { get; set; } = [];
     public DateTime ExpiresAt { get; set; }
+}
+
+public sealed class TicketActivity
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string ActorId { get; set; } = "";
+    public string ActorName { get; set; } = "";
+    public string Action { get; set; } = "";
+    public string? Field { get; set; }
+    public string? OldValue { get; set; }
+    public string? NewValue { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

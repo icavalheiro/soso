@@ -50,57 +50,15 @@ public static class BoardEndpoints
             }
         });
         boards.MapPost("/{id}/tickets/{ticketId}/comments", (string id, string ticketId, CommentRequest request, ClaimsPrincipal user, BoardService service) => TypedResults.Ok(service.Comment(id, ticketId, request.Text, user)));
-        boards.MapDelete("/{id}/tickets/{ticketId}/comments/{commentId}", (string id, string ticketId, string commentId, ClaimsPrincipal user, BoardService service, Store store) =>
-        {
-            lock (store.Gate)
-            {
-                var ticket = service.RequireTicket(id, ticketId, user);
-                var comment = ticket.Comments.FirstOrDefault(comment => comment.Id == commentId) ?? throw new ApiException(404, "Comment not found.");
-                var canDelete = comment.AuthorId == BoardService.UserId(user) || user.IsInRole("admin");
-                if (!canDelete)
-                {
-                    throw new ApiException(403, "You can only delete your own comments.");
-                }
-                ticket.Comments.Remove(comment);
-                ticket.Revision++;
-                store.Tickets.Update(ticket);
-                return TypedResults.Ok(ticket);
-            }
-        });
-        boards.MapPost("/{id}/tickets/{ticketId}/images", async (string id, string ticketId, HttpContext context, BoardService service, Store store) =>
+        boards.MapDelete("/{id}/tickets/{ticketId}/comments/{commentId}", (string id, string ticketId, string commentId, ClaimsPrincipal user, BoardService service) => TypedResults.Ok(service.DeleteComment(id, ticketId, commentId, user)));
+        boards.MapPost("/{id}/tickets/{ticketId}/images", async (string id, string ticketId, HttpContext context, BoardService service) =>
         {
             service.RequireTicket(id, ticketId, context.User);
             var content = await ReadImage(context);
-            lock (store.Gate)
-            {
-                var ticket = service.RequireTicket(id, ticketId, context.User);
-                if (ticket.Images.Count >= 6)
-                {
-                    throw new ApiException(400, "A ticket supports up to six images.");
-                }
-                var image = new ImageAsset { OwnerId = BoardService.UserId(context.User), BoardId = id, Content = content };
-                store.Images.Insert(image);
-                ticket.Images.Add(image.Id);
-                ticket.Revision++;
-                store.Tickets.Update(ticket);
-                return TypedResults.Ok(ticket);
-            }
+            var image = new ImageAsset { OwnerId = BoardService.UserId(context.User), BoardId = id, Content = content };
+            return TypedResults.Ok(service.AddImage(id, ticketId, image, context.User));
         });
-        boards.MapDelete("/{id}/tickets/{ticketId}/images/{imageId}", (string id, string ticketId, string imageId, ClaimsPrincipal user, BoardService service, Store store) =>
-        {
-            lock (store.Gate)
-            {
-                var ticket = service.RequireTicket(id, ticketId, user);
-                if (!ticket.Images.Remove(imageId))
-                {
-                    throw new ApiException(404, "Image not found.");
-                }
-                store.Images.Delete(imageId);
-                ticket.Revision++;
-                store.Tickets.Update(ticket);
-                return TypedResults.Ok(ticket);
-            }
-        });
+        boards.MapDelete("/{id}/tickets/{ticketId}/images/{imageId}", (string id, string ticketId, string imageId, ClaimsPrincipal user, BoardService service) => TypedResults.Ok(service.RemoveImage(id, ticketId, imageId, user)));
         app.MapPost("/api/auth/avatar", async (HttpContext context, Store store) =>
         {
             var content = await ReadImage(context);

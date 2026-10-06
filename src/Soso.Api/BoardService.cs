@@ -136,6 +136,7 @@ public sealed class BoardService(Store store)
             }
             var position = store.Tickets.Find(ticket => ticket.BoardId == boardId).Select(ticket => ticket.Position).DefaultIfEmpty(0).Max() + 1024;
             var ticket = new Ticket { BoardId = boardId, ColumnId = request.ColumnId, Title = Text(request.Title, 160), Description = request.Description?.Trim() ?? "", Tags = tags.Distinct().ToList(), AssigneeId = request.AssigneeId, Position = position };
+            Track(ticket, user, "created");
             store.Tickets.Insert(ticket);
             return ticket;
         }
@@ -163,6 +164,16 @@ public sealed class BoardService(Store store)
             {
                 throw new ApiException(400, "Invalid ticket properties.");
             }
+            TrackChange(ticket, user, "title", ticket.Title, request.Title);
+            TrackChange(ticket, user, "description", ticket.Description, request.Description);
+            TrackChange(ticket, user, "status", ColumnName(board, ticket.ColumnId), ColumnName(board, request.ColumnId));
+            TrackChange(ticket, user, "priority", ticket.Priority, request.Priority);
+            TrackChange(ticket, user, "assignee", PersonName(ticket.AssigneeId), PersonName(request.AssigneeId));
+            TrackChange(ticket, user, "due_date", ticket.DueDate?.ToString("O"), request.DueDate?.UtcDateTime.ToString("O"));
+            TrackChange(ticket, user, "position", ticket.Position.ToString("G17"), request.Position.ToString("G17"));
+            TrackChange(ticket, user, "tags", string.Join(", ", ticket.Tags), string.Join(", ", request.Tags.Distinct()));
+            TrackChange(ticket, user, "archived", ticket.Archived.ToString(), request.Archived.ToString());
+            TrackChange(ticket, user, "subtasks", SubtasksValue(ticket.Subtasks), SubtasksValue(request.Subtasks));
             ticket.Title = Text(request.Title, 160);
             ticket.Description = request.Description.Trim();
             ticket.ColumnId = request.ColumnId;
@@ -295,12 +306,90 @@ public sealed class BoardService(Store store)
             {
                 throw new ApiException(400, "Comment limit reached.");
             }
-            ticket.Comments.Add(new TicketComment { AuthorId = UserId(user), Text = Text(text, 4000) });
+            var content = Text(text, 4000);
+            ticket.Comments.Add(new TicketComment { AuthorId = UserId(user), Text = content });
+            Track(ticket, user, "comment_added", "comment", null, content);
             ticket.Revision++;
             store.Tickets.Update(ticket);
             return ticket;
         }
     }
+
+    public Ticket DeleteComment(string boardId, string ticketId, string commentId, ClaimsPrincipal user)
+    {
+        lock (store.Gate)
+        {
+            var ticket = RequireTicket(boardId, ticketId, user);
+            var comment = ticket.Comments.FirstOrDefault(item => item.Id == commentId) ?? throw new ApiException(404, "Comment not found.");
+            var canDelete = comment.AuthorId == UserId(user) || user.IsInRole("admin");
+            if (!canDelete)
+            {
+                throw new ApiException(403, "You can only delete your own comments.");
+            }
+            ticket.Comments.Remove(comment);
+            Track(ticket, user, "comment_deleted", "comment", comment.Text);
+            ticket.Revision++;
+            store.Tickets.Update(ticket);
+            return ticket;
+        }
+    }
+
+    public Ticket AddImage(string boardId, string ticketId, ImageAsset image, ClaimsPrincipal user)
+    {
+        lock (store.Gate)
+        {
+            var ticket = RequireTicket(boardId, ticketId, user);
+            if (ticket.Images.Count >= 6)
+            {
+                throw new ApiException(400, "A ticket supports up to six images.");
+            }
+            store.Images.Insert(image);
+            ticket.Images.Add(image.Id);
+            Track(ticket, user, "image_added", "image", null, image.Id);
+            ticket.Revision++;
+            store.Tickets.Update(ticket);
+            return ticket;
+        }
+    }
+
+    public Ticket RemoveImage(string boardId, string ticketId, string imageId, ClaimsPrincipal user)
+    {
+        lock (store.Gate)
+        {
+            var ticket = RequireTicket(boardId, ticketId, user);
+            if (!ticket.Images.Remove(imageId))
+            {
+                throw new ApiException(404, "Image not found.");
+            }
+            store.Images.Delete(imageId);
+            Track(ticket, user, "image_removed", "image", imageId);
+            ticket.Revision++;
+            store.Tickets.Update(ticket);
+            return ticket;
+        }
+    }
+
+    private void TrackChange(Ticket ticket, ClaimsPrincipal user, string field, string? oldValue, string? newValue)
+    {
+        if (oldValue != newValue)
+        {
+            Track(ticket, user, "field_changed", field, oldValue, newValue);
+        }
+    }
+
+    private void Track(Ticket ticket, ClaimsPrincipal user, string action, string? field = null, string? oldValue = null, string? newValue = null)
+    {
+        var actorId = UserId(user);
+        var actor = store.Accounts.FindById(actorId);
+        ticket.Activity.Add(new TicketActivity { ActorId = actorId, ActorName = actor?.Name ?? actorId, Action = action, Field = field, OldValue = oldValue, NewValue = newValue });
+    }
+
+    private string? PersonName(string? id) => id is null ? null : store.Accounts.FindById(id)?.Name ?? id;
+
+    private static string ColumnName(Board board, string id) => board.Columns.First(column => column.Id == id).Name;
+
+    private static string SubtasksValue(IEnumerable<Subtask> subtasks) => string.Join("; ", subtasks.Select(task => $"{(task.Done ? "[x]" : "[ ]")} {task.Title}"));
+    private static string SubtasksValue(IEnumerable<SubtaskRequest> subtasks) => string.Join("; ", subtasks.Select(task => $"{(task.Done ? "[x]" : "[ ]")} {task.Title}"));
 
     public static string Text(string value, int maximum)
     {

@@ -579,8 +579,13 @@ test( 'ticket subtasks, comments and images', async ( { page } ) =>
     await page.getByRole( 'button', { name: 'Add subtask', exact: true } ).click();
     await page.getByRole( 'checkbox', { name: 'Complete Review mobile spacing' } ).check();
     await page.getByLabel( 'New comment', { exact: true } ).fill( 'Ready for review' );
-    await page.getByRole( 'button', { name: 'Post comment' } ).click();
+    await page.getByLabel( 'New comment', { exact: true } ).press( 'Control+Enter' );
     await expect( page.getByText( 'Ready for review', { exact: true } ) ).toBeVisible();
+    const activity = page.locator( 'details.ticket-activity' );
+    await expect( activity ).toContainText( 'Activity history' );
+    await activity.locator( 'summary' ).click();
+    await expect( activity ).toContainText( 'added a comment' );
+    await expect( activity ).toContainText( 'Maya Chen' );
     await page.locator( 'input[type=file]' ).setInputFiles( 'public/logo.jpg' );
     await expect( page.getByAltText( 'Ticket attachment', { exact: true } ) ).toBeVisible();
     await page.getByRole( 'button', { name: 'Save changes' } ).click();

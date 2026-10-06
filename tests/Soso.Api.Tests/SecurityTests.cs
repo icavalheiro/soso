@@ -187,7 +187,7 @@ public sealed class SecurityTests
             var after = JsonSerializer.SerializeToElement(patched, JsonOptions);
             foreach (var property in before.EnumerateObject())
             {
-                var changedProperty = property.Name is "revision" or "priority";
+                var changedProperty = property.Name is "revision" or "priority" or "activity";
                 if (!changedProperty)
                 {
                     Assert.Equal(property.Value.GetRawText(), after.GetProperty(property.Name).GetRawText());
@@ -230,6 +230,31 @@ public sealed class SecurityTests
             Assert.Null(reloaded.AssigneeId);
             Assert.Null(reloaded.DueDate);
             Assert.False(reloaded.Archived);
+        });
+    }
+
+    [Fact]
+    public void TicketActivityRecordsCreationChangesAndCommentEventsWithActorAndTime()
+    {
+        WithMcp((service, tools, user, accessor, store) =>
+        {
+            var board = service.Create(new("Activity", ""), user);
+            var ticket = service.CreateTicket(board.Id, new("History ticket", board.Columns[0].Id), user);
+            var created = Assert.Single(ticket.Activity);
+            Assert.Equal("created", created.Action);
+            Assert.Equal("owner", created.ActorName);
+            Assert.NotEqual(default, created.CreatedAt);
+
+            ticket = service.UpdateTicket(board.Id, ticket.Id, Edit(ticket) with { ColumnId = board.Columns[1].Id, Title = "Renamed" }, user);
+            Assert.Contains(ticket.Activity, item => item.Action == "field_changed" && item.Field == "status" && item.OldValue == board.Columns[0].Name && item.NewValue == board.Columns[1].Name);
+            Assert.Contains(ticket.Activity, item => item.Action == "field_changed" && item.Field == "title" && item.OldValue == "History ticket" && item.NewValue == "Renamed");
+
+            ticket = service.Comment(board.Id, ticket.Id, "A note for the history", user);
+            var commentEvent = Assert.Single(ticket.Activity, item => item.Action == "comment_added");
+            Assert.Equal("A note for the history", commentEvent.NewValue);
+            Assert.Equal("owner", commentEvent.ActorId);
+            ticket = service.DeleteComment(board.Id, ticket.Id, ticket.Comments[0].Id, user);
+            Assert.Contains(ticket.Activity, item => item.Action == "comment_deleted" && item.OldValue == "A note for the history");
         });
     }
 
