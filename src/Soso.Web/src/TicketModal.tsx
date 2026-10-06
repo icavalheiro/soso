@@ -64,9 +64,10 @@ export function TicketModal ( { ticket, data, account, onClose, onChange, onDele
 
     function apply ( result: Ticket )
     {
-        setDraft( result );
-        setBaseline( JSON.stringify( ticketBody( result ) ) );
-        onChange( result );
+        const normalized = { ...result, description: result.description ?? '' };
+        setDraft( normalized );
+        setBaseline( JSON.stringify( ticketBody( normalized ) ) );
+        onChange( normalized );
     }
 
     async function saveDraft ()
@@ -201,7 +202,7 @@ export function TicketModal ( { ticket, data, account, onClose, onChange, onDele
                         { editingDescription ?
                             <Textarea aria-label={ t( 'Description' ) } placeholder={ t( 'Add a description' ) } minRows={ 4 } autosize maxRows={ 12 } maxLength={ 12000 } autoFocus value={ draft.description } onChange={ event => { setDraft( { ...draft, description: event.currentTarget.value } ); } } onPaste={ event => { handleImagePaste( event, 'description' ); } } /> :
                             <div className="ticket-description-markdown">
-                                { draft.description.trim() ? <Markdown remarkPlugins={ [ remarkGfm ] } skipHtml components={ { img: ( { src, alt } ) => renderImageReference( src, alt ) } }>{ draft.description }</Markdown> : <Text size="sm" c="dimmed">{ t( 'No description' ) }</Text> }
+                                { ( draft.description ?? '' ).trim() ? <Markdown remarkPlugins={ [ remarkGfm ] } skipHtml components={ { img: ( { src, alt } ) => renderImageReference( src, alt ) } }>{ draft.description ?? '' }</Markdown> : <Text size="sm" c="dimmed">{ t( 'No description' ) }</Text> }
                             </div> }
                     </section>
                     <section><Group justify="space-between" mb="sm"><Text size="sm" fw={ 600 }><CheckSquare size={ 15 } className="inline-icon" /> { t( 'Subtasks' ) }</Text><Text c="dimmed" size="xs">{ done } / { draft.subtasks.length }</Text></Group>{ draft.subtasks.length > 0 && <Progress size={ 4 } value={ done / draft.subtasks.length * 100 } mb="md" /> }<Stack gap={ 9 }>{ draft.subtasks.map( task => <Group key={ task.id } gap="xs" wrap="nowrap"><Checkbox aria-label={ `${ t( 'Complete' ) } ${ task.title }` } checked={ task.done } onChange={ event => { const checked = event.currentTarget.checked; setDraft( { ...draft, subtasks: draft.subtasks.map( item => item.id === task.id ? { ...item, done: checked } : item ) } ); } } /><TextInput aria-label={ t( 'Subtask title' ) } variant="unstyled" maxLength={ 300 } required value={ task.title } className={ task.done ? 'completed-task' : '' } style={ { flex: 1 } } onChange={ event => { const title = event.currentTarget.value; setDraft( { ...draft, subtasks: draft.subtasks.map( item => item.id === task.id ? { ...item, title } : item ) } ); } } /><Tooltip label={ t( 'Remove subtask' ) }><ActionIcon aria-label={ t( 'Remove subtask' ) } color="gray" variant="subtle" onClick={ () => { setDraft( { ...draft, subtasks: draft.subtasks.filter( item => item.id !== task.id ) } ); } }><Trash2 size={ 14 } /></ActionIcon></Tooltip></Group> ) }</Stack><Group gap="xs" mt="sm" wrap="nowrap"><TextInput aria-label={ t( 'New subtask' ) } placeholder={ t( 'Add a subtask' ) } maxLength={ 300 } value={ subtask } style={ { flex: 1 } } onChange={ event => { setSubtask( event.currentTarget.value ); } } onKeyDown={ event => { if ( event.key === 'Enter' ) { event.preventDefault(); addSubtask(); } } } /><Tooltip label={ t( 'Add subtask' ) }><ActionIcon aria-label={ t( 'Add subtask' ) } size="lg" variant="light" disabled={ draft.subtasks.length >= 100 || !subtask.trim() } onClick={ addSubtask }><Plus size={ 18 } /></ActionIcon></Tooltip></Group></section>

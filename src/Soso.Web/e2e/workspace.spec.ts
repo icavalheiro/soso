@@ -573,12 +573,15 @@ for ( const width of [ 1366, 390 ] )
 test( 'ticket subtasks, comments and images', async ( { page } ) =>
 {
     const state = await installApiMock( page );
+    const failures: string[] = [];
+    page.on( 'pageerror', error => { failures.push( error.message ); } );
     await page.goto( '/' );
     await page.getByRole( 'button', { name: 'Open ticket: Sketch the board layout', exact: true } ).click();
     await page.getByLabel( 'New subtask', { exact: true } ).fill( 'Review mobile spacing' );
     await page.getByRole( 'button', { name: 'Add subtask', exact: true } ).click();
     await page.getByRole( 'checkbox', { name: 'Complete Review mobile spacing' } ).check();
     await page.getByLabel( 'New comment', { exact: true } ).fill( 'Ready for review' );
+    state.data.tickets[ 0 ].description = null as unknown as string;
     await page.getByLabel( 'New comment', { exact: true } ).press( 'Control+Enter' );
     await expect( page.locator( '.comment-markdown' ).getByText( 'Ready for review', { exact: true } ) ).toBeVisible();
     await expect( page.getByRole( 'dialog' ) ).toBeVisible();
@@ -588,6 +591,7 @@ test( 'ticket subtasks, comments and images', async ( { page } ) =>
     await activity.locator( 'summary' ).click();
     await expect( activity ).toContainText( 'added a comment' );
     await expect( activity ).toContainText( 'Maya Chen' );
+    expect( failures ).toEqual( [] );
     await page.locator( 'input[type=file]' ).setInputFiles( 'public/logo.jpg' );
     await expect( page.getByAltText( 'Ticket attachment', { exact: true } ) ).toBeVisible();
     await page.getByRole( 'button', { name: 'Save changes' } ).click();
