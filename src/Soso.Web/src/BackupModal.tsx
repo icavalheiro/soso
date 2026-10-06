@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Button, Group, Modal, PasswordInput, Stack, Text, TextInput } from '@mantine/core';
-import { Cloud, Save, Unplug } from 'lucide-react';
+import { Alert, Button, Group, Modal, PasswordInput, Stack, Text, TextInput } from '@mantine/core';
+import { AlertCircle, Cloud, Save, Unplug } from 'lucide-react';
 import { api } from './api';
 import { reportError } from './feedback';
 import { useLanguage } from './useLanguage';
@@ -15,6 +15,7 @@ export function BackupModal ( { onClose }: { onClose: () => void; } )
     const [ accessToken, setAccessToken ] = useState( '' );
     const [ busy, setBusy ] = useState( false );
     const [ message, setMessage ] = useState( '' );
+    const missingWriteScope = [ message, status?.lastError ?? '' ].some( value => value.includes( 'files.content.write' ) || value.includes( 'missing_scope' ) );
 
     async function refresh ()
     {
@@ -81,10 +82,15 @@ export function BackupModal ( { onClose }: { onClose: () => void; } )
     return <Modal opened onClose={ onClose } title={ t( 'Backup' ) } size="md" centered>
         <form onSubmit={ event => { void save( event ); } }><Stack>
             <Text size="sm" c="dimmed">{ t( 'Connect a Dropbox app to store automatic database backups. Backups run 10 minutes after changes stop. If changes continue, a backup runs after 1 hour without a saved backup.' ) }</Text>
+            { missingWriteScope ?
+                <Alert color="red" icon={ <AlertCircle size={ 18 } /> } title={ t( 'Dropbox write permission required' ) } role="alert">
+                    <Text size="sm">{ t( 'Dropbox rejected this access token because it does not include files.content.write. In the Dropbox App Console, enable files.content.write, generate a new access token, then enter that token below and save Dropbox settings.' ) }</Text>
+                </Alert> :
+                <Text size="sm" c="dimmed">{ t( 'The Dropbox app needs the files.content.write permission. If you enable it after creating a token, generate a new access token and reconnect.' ) }</Text> }
             <TextInput label={ t( 'Dropbox app key' ) } required maxLength={ 200 } value={ appKey } onChange={ event => { setAppKey( event.currentTarget.value ); } } />
             <PasswordInput label={ t( 'Dropbox access token' ) } required maxLength={ 4000 } autoComplete="new-password" placeholder={ status?.connected ? t( 'Enter a new token to replace the saved token' ) : '' } value={ accessToken } onChange={ event => { setAccessToken( event.currentTarget.value ); } } />
             { status && <Text size="sm">{ status.connected ? t( 'Dropbox connected' ) : t( 'Dropbox not connected' ) }{ status.lastBackupAt ? ` · ${ t( 'Last backup' ) }: ${ new Date( status.lastBackupAt ).toLocaleString() }` : '' }</Text> }
-            { status?.lastError && <Text size="sm" c="red" role="alert">{ t( 'Last backup error' ) }: { status.lastError }</Text> }
+            { status?.lastError && !missingWriteScope && <Text size="sm" c="red" role="alert">{ t( 'Last backup error' ) }: { status.lastError }</Text> }
             { message && <Text size="sm" c="teal" role="status">{ message }</Text> }
             <Group justify="space-between" wrap="wrap">
                 <Group>

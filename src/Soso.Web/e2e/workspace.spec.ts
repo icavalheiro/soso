@@ -718,6 +718,35 @@ test( 'administrator account screen', async ( { page } ) =>
     expect( ( await update ).postDataJSON().boardIds ).toEqual( [ 'board-fixture' ] );
 } );
 
+test( 'Dropbox missing write permission shows a clear backup alert', async ( { page } ) =>
+{
+    await installApiMock( page );
+    let savedBackupError: string | null = null;
+    await page.route( '**/api/admin/backup**', async route =>
+    {
+        const request = route.request();
+        if ( request.method() === 'GET' )
+        {
+            return route.fulfill( { json: { connected: true, appKey: 'test-app', lastBackupAt: null, lastError: savedBackupError } } );
+        }
+        if ( request.method() === 'POST' && new URL( request.url() ).pathname.endsWith( '/run' ) )
+        {
+            savedBackupError = 'Dropbox is missing the files.content.write permission for this access token. Enable it in the Dropbox App Console, generate a new access token, then replace the saved token in Backup settings.';
+            return route.fulfill( { status: 502, json: { detail: savedBackupError } } );
+        }
+        return route.fulfill( { status: 204 } );
+    } );
+
+    await page.goto( '/' );
+    await page.getByRole( 'button', { name: 'Backup', exact: true } ).click();
+    await page.getByRole( 'button', { name: 'Back up now', exact: true } ).click();
+
+    const alert = page.getByRole( 'alert', { name: 'Dropbox write permission required' } );
+    await expect( alert ).toContainText( 'Dropbox App Console' );
+    await expect( alert ).toContainText( 'generate a new access token' );
+    await expect( alert ).toContainText( 'save Dropbox settings' );
+} );
+
 for ( const viewport of [ { name: 'desktop', width: 1366, height: 900 }, { name: 'mobile', width: 390, height: 844 } ] )
 {
     test( `${ viewport.name } layout and both themes`, async ( { page }, testInfo ) =>

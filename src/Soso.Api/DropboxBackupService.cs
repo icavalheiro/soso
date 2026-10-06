@@ -185,9 +185,14 @@ public sealed class DropboxBackupService(Store store, IHttpClientFactory clients
                 (int)response.StatusCode, phase, requestId ?? "unavailable", detail ?? "no error details");
             var message = response.StatusCode switch
             {
+                System.Net.HttpStatusCode.Unauthorized when detail?.Contains("missing_scope", StringComparison.OrdinalIgnoreCase) == true
+                    || detail?.Contains("files.content.write", StringComparison.OrdinalIgnoreCase) == true
+                    => "Dropbox is missing the files.content.write permission for this access token. Enable it in the Dropbox App Console, generate a new access token, then replace the saved token in Backup settings.",
                 System.Net.HttpStatusCode.Unauthorized => "Dropbox rejected the access token. Reconnect with a valid token.",
                 System.Net.HttpStatusCode.Forbidden => "Dropbox denied the upload. Ensure the app has the files.content.write permission and reconnect after changing permissions.",
                 (System.Net.HttpStatusCode)507 => "Dropbox storage is full. Free up Dropbox space and try again.",
+                System.Net.HttpStatusCode.BadRequest when detail?.Contains("files.content.write", StringComparison.OrdinalIgnoreCase) == true
+                    => "The Dropbox app is missing the files.content.write permission. Enable it in the Dropbox App Console under Permissions, then generate a new access token and reconnect.",
                 _ when detail is not null => $"Dropbox returned HTTP {(int)response.StatusCode} while {phase}: {detail}{(requestId is null ? "" : $" (request ID {requestId})")}",
                 _ => $"Dropbox could not store the backup (HTTP {(int)response.StatusCode} while {phase}). Check the app permissions and available Dropbox space.{(requestId is null ? "" : $" Dropbox request ID: {requestId}.")}"
             };
@@ -207,6 +212,15 @@ public sealed class DropboxBackupService(Store store, IHttpClientFactory clients
                 return null;
             }
             using var document = JsonDocument.Parse(body);
+            if (document.RootElement.TryGetProperty("user_message", out var userMessage)
+                && userMessage.ValueKind == JsonValueKind.Object
+                && userMessage.TryGetProperty("text", out var userMessageText)
+                && userMessageText.ValueKind == JsonValueKind.String
+                && !string.IsNullOrWhiteSpace(userMessageText.GetString()))
+            {
+                var text = userMessageText.GetString()!;
+                return text.Length > 500 ? text[..500] : text;
+            }
             if (document.RootElement.TryGetProperty("error_summary", out var summary) && summary.ValueKind == JsonValueKind.String)
             {
                 var summaryText = summary.GetString();
@@ -220,7 +234,10 @@ public sealed class DropboxBackupService(Store store, IHttpClientFactory clients
                 var errorTags = GetDropboxErrorTags(error);
                 if (errorTags.Count > 0)
                 {
-                    return string.Join("/", errorTags);
+                    var requiredScope = GetDropboxRequiredScope(error);
+                    return requiredScope is null
+                        ? string.Join("/", errorTags)
+                        : $"{string.Join("/", errorTags)}/{requiredScope}";
                 }
             }
             return document.RootElement.TryGetProperty("error_summary", out var fallback) && fallback.ValueKind == JsonValueKind.String
@@ -258,6 +275,37 @@ public sealed class DropboxBackupService(Store store, IHttpClientFactory clients
             }
         }
         return tags;
+    }
+
+    private static string? GetDropboxRequiredScope(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            if (element.TryGetProperty("required_scope", out var scope) && scope.ValueKind == JsonValueKind.String)
+            {
+                return scope.GetString();
+            }
+            foreach (var property in element.EnumerateObject())
+            {
+                var nestedScope = GetDropboxRequiredScope(property.Value);
+                if (nestedScope is not null)
+                {
+                    return nestedScope;
+                }
+            }
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in element.EnumerateArray())
+            {
+                var nestedScope = GetDropboxRequiredScope(item);
+                if (nestedScope is not null)
+                {
+                    return nestedScope;
+                }
+            }
+        }
+        return null;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

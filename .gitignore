@@ -16,6 +16,10 @@ src-tauri/gen/
 .env
 .env.*
 !.env.example
+dropbox-acesstoken.txt
+dropbox-accesstoken.txt
+**/dropbox-acesstoken.txt
+**/dropbox-accesstoken.txt
 *.pem
 *.key
 # Logs

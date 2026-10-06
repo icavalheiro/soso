@@ -1,5 +1,9 @@
 .git
 .env
+dropbox-acesstoken.txt
+dropbox-accesstoken.txt
+**/dropbox-acesstoken.txt
+**/dropbox-accesstoken.txt
 **/node_modules
 **/bin
 **/obj
