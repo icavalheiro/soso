@@ -22,7 +22,7 @@ public sealed class DropboxBackupTests
         {
             var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["DataPath"] = dataPath }).Build();
             using var store = new Store(configuration);
-            var content = new byte[5 * 1024 * 1024];
+            var content = new byte[9 * 1024 * 1024];
             Random.Shared.NextBytes(content);
             store.Images.Insert(new ImageAsset { Id = Guid.NewGuid().ToString("N"), OwnerId = "test", Content = content });
 
@@ -37,17 +37,19 @@ public sealed class DropboxBackupTests
             Assert.Equal(3, handler.Requests.Count);
             Assert.Equal("/2/files/upload_session/start", handler.Requests[0].Path);
             Assert.Equal("false", handler.Requests[0].Arguments.RootElement.GetProperty("close").GetRawText());
+            Assert.Equal(4 * 1024 * 1024, handler.Requests[0].ContentLength);
             Assert.Equal("/2/files/upload_session/append_v2", handler.Requests[1].Path);
             var cursor = handler.Requests[1].Arguments.RootElement.GetProperty("cursor");
             Assert.Equal("session-test", cursor.GetProperty("session_id").GetString());
-            Assert.Equal(0, cursor.GetProperty("offset").GetInt64());
+            Assert.Equal(4 * 1024 * 1024, cursor.GetProperty("offset").GetInt64());
+            Assert.Equal(4 * 1024 * 1024, handler.Requests[1].ContentLength);
             Assert.Equal("/2/files/upload_session/finish", handler.Requests[2].Path);
             var finish = handler.Requests[2].Arguments.RootElement;
             Assert.Equal("session-test", finish.GetProperty("cursor").GetProperty("session_id").GetString());
-            Assert.Equal(4 * 1024 * 1024, finish.GetProperty("cursor").GetProperty("offset").GetInt64());
+            Assert.Equal(handler.Requests[0].ContentLength + handler.Requests[1].ContentLength, finish.GetProperty("cursor").GetProperty("offset").GetInt64());
             Assert.Equal("/soso-backup.db", finish.GetProperty("commit").GetProperty("path").GetString());
             Assert.Equal("overwrite", finish.GetProperty("commit").GetProperty("mode").GetString());
-            Assert.All(handler.Requests, request => Assert.True(request.ContentLength > 0 || request.Path.EndsWith("/start", StringComparison.Ordinal)));
+            Assert.True(handler.Requests[2].ContentLength > 0);
         }
         finally
         {

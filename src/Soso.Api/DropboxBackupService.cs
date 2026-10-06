@@ -118,19 +118,27 @@ public sealed class DropboxBackupService(Store store, IHttpClientFactory clients
     {
         const int chunkSize = 4 * 1024 * 1024;
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, chunkSize, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        if (stream.Length == 0)
+        {
+            throw new ApiException(500, "The database backup file is empty; Dropbox upload was not started.");
+        }
+
+        var firstChunkLength = checked((int)Math.Min(stream.Length, chunkSize));
+        var firstChunk = new byte[firstChunkLength];
+        await stream.ReadExactlyAsync(firstChunk, cancellationToken);
 
         using var startResponse = await SendUploadChunkAsync(
             credentials,
             "upload_session/start",
             "starting upload session",
             new { close = false },
-            [],
+            firstChunk,
             cancellationToken);
         using var startDocument = JsonDocument.Parse(await startResponse.Content.ReadAsStringAsync(cancellationToken));
         var sessionId = startDocument.RootElement.GetProperty("session_id").GetString()
             ?? throw new ApiException(502, "Dropbox did not return an upload session ID.");
 
-        long offset = 0;
+        long offset = firstChunkLength;
         while (stream.Length - offset > chunkSize)
         {
             var chunk = new byte[chunkSize];
