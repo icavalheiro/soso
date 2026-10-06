@@ -572,7 +572,7 @@ for ( const width of [ 1366, 390 ] )
 
 test( 'ticket subtasks, comments and images', async ( { page } ) =>
 {
-    await installApiMock( page );
+    const state = await installApiMock( page );
     await page.goto( '/' );
     await page.getByRole( 'button', { name: 'Open ticket: Sketch the board layout', exact: true } ).click();
     await page.getByLabel( 'New subtask', { exact: true } ).fill( 'Review mobile spacing' );
@@ -580,7 +580,9 @@ test( 'ticket subtasks, comments and images', async ( { page } ) =>
     await page.getByRole( 'checkbox', { name: 'Complete Review mobile spacing' } ).check();
     await page.getByLabel( 'New comment', { exact: true } ).fill( 'Ready for review' );
     await page.getByLabel( 'New comment', { exact: true } ).press( 'Control+Enter' );
-    await expect( page.getByText( 'Ready for review', { exact: true } ) ).toBeVisible();
+    await expect( page.locator( '.comment-markdown' ).getByText( 'Ready for review', { exact: true } ) ).toBeVisible();
+    await expect( page.getByRole( 'dialog' ) ).toBeVisible();
+    expect( state.data.tickets[ 0 ].comments ).toHaveLength( 1 );
     const activity = page.locator( 'details.ticket-activity' );
     await expect( activity ).toContainText( 'Activity history' );
     await activity.locator( 'summary' ).click();

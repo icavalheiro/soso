@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { ClipboardEvent } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -15,6 +15,7 @@ export function TicketModal ( { ticket, data, account, onClose, onChange, onDele
     const [ draft, setDraft ] = useState<Ticket>( () => ( { ...structuredClone( ticket ), description: ticket.description ?? '' } ) );
     const [ baseline, setBaseline ] = useState( JSON.stringify( ticketBody( ticket ) ) );
     const [ comment, setComment ] = useState( '' );
+    const postingComment = useRef( false );
     const [ subtask, setSubtask ] = useState( '' );
     const [ busy, setBusy ] = useState( false );
     const [ confirm, setConfirm ] = useState<'delete' | 'discard' | null>( null );
@@ -25,11 +26,13 @@ export function TicketModal ( { ticket, data, account, onClose, onChange, onDele
 
     function postComment ()
     {
-        if ( !comment.trim() || busy )
+        const text = comment.trim();
+        if ( !text || busy || postingComment.current )
         {
             return;
         }
-        void action( async () => { await saveDraft(); apply( await api<Ticket>( `${ path }/comments`, 'POST', { text: comment } ) ); setComment( '' ); } );
+        postingComment.current = true;
+        void action( async () => { await saveDraft(); apply( await api<Ticket>( `${ path }/comments`, 'POST', { text } ) ); setComment( '' ); } ).finally( () => { postingComment.current = false; } );
     }
 
     function activityText ( item: Ticket[ 'activity' ][ number ] )
@@ -208,7 +211,7 @@ export function TicketModal ( { ticket, data, account, onClose, onChange, onDele
                         const author = data.members.find( member => member.id === item.authorId );
                         const canDelete = item.authorId === account.id || account.isAdmin;
                         return <div className="comment" key={ item.id }><Avatar size={ 28 } radius="xl" src={ imageUrl( author?.avatarId ) }>{ author?.name.slice( 0, 1 ) ?? '?' }</Avatar><div className="comment-body"><Group justify="space-between" gap="xs"><Text size="xs" fw={ 600 }>{ author?.name ?? t( 'Former member' ) }</Text><Text size="xs" c="dimmed">{ new Date( item.createdAt ).toLocaleString( undefined, { dateStyle: 'short', timeStyle: 'short' } ) }</Text></Group><div className="comment-markdown"><Markdown remarkPlugins={ [ remarkGfm ] } skipHtml components={ { img: ( { src, alt } ) => renderImageReference( src, alt ), a: ( { children } ) => <span>{ children }</span>, input: () => null } }>{ item.text }</Markdown></div></div>{ canDelete && <Tooltip label={ t( 'Delete comment' ) }><ActionIcon aria-label={ t( 'Delete comment' ) } variant="subtle" color="gray" size="sm" onClick={ () => { void action( async () => { await saveDraft(); apply( await api<Ticket>( `${ path }/comments/${ item.id }`, 'DELETE' ) ); } ); } }><Trash2 size={ 13 } /></ActionIcon></Tooltip> }</div>;
-                    } ) }<Textarea aria-label={ t( 'New comment' ) } placeholder={ t( 'Write a comment' ) } description={ t( 'Press Ctrl + Enter to post' ) } minRows={ 2 } maxLength={ 4000 } value={ comment } onChange={ event => { setComment( event.currentTarget.value ); } } onPaste={ event => { handleImagePaste( event, 'comment' ); } } onKeyDown={ event => { if ( event.key === 'Enter' && ( event.ctrlKey || event.metaKey ) ) { event.preventDefault(); postComment(); } } } /><Group justify="flex-end"><Button size="xs" variant="light" leftSection={ <Send size={ 14 } /> } disabled={ !comment.trim() } onClick={ postComment }>{ t( 'Post comment' ) }</Button></Group></Stack></section>
+                    } ) }<Textarea aria-label={ t( 'New comment' ) } placeholder={ t( 'Write a comment' ) } description={ t( 'Press Ctrl + Enter to post' ) } minRows={ 2 } maxLength={ 4000 } value={ comment } disabled={ busy } onChange={ event => { setComment( event.currentTarget.value ); } } onPaste={ event => { handleImagePaste( event, 'comment' ); } } onKeyDown={ event => { if ( event.key === 'Enter' && ( event.ctrlKey || event.metaKey ) ) { event.preventDefault(); postComment(); } } } /><Group justify="flex-end"><Button size="xs" variant="light" leftSection={ <Send size={ 14 } /> } disabled={ busy || !comment.trim() } onClick={ postComment }>{ t( 'Post comment' ) }</Button></Group></Stack></section>
                     <details className="ticket-activity"><summary><Group gap="xs"><ChevronDown size={ 15 } /><Text size="sm" fw={ 600 }>{ t( 'Activity history' ) }</Text><Text size="xs" c="dimmed">{ draft.activity?.length ?? 0 }</Text></Group></summary><Stack gap="sm" mt="md">{ [ ...( draft.activity ?? [] ) ].reverse().map( item => <div className="activity-item" key={ item.id }><Avatar size={ 24 } radius="xl">{ item.actorName.slice( 0, 1 ).toUpperCase() }</Avatar><div className="activity-body"><Text size="xs"><strong>{ item.actorName }</strong> { activityText( item ) }</Text>{ item.action === 'comment_added' && item.newValue && <Text size="xs" c="dimmed" className="activity-detail">{ item.newValue }</Text> }<Text size="xs" c="dimmed">{ new Date( item.createdAt ).toLocaleString( undefined, { dateStyle: 'medium', timeStyle: 'short' } ) }</Text></div></div> ) }</Stack></details>
                 </Stack></div><aside className="ticket-properties"><Stack><Select label={ t( 'Status' ) } value={ draft.columnId } allowDeselect={ false } data={ data.board.columns.map( column => ( { value: column.id, label: column.name } ) ) } onChange={ value => { setDraft( { ...draft, columnId: value ?? draft.columnId } ); } } /><Select label={ t( 'Priority' ) } value={ draft.priority } allowDeselect={ false } data={ [ 'low', 'normal', 'high', 'urgent' ].map( value => ( { value, label: t( value[ 0 ].toUpperCase() + value.slice( 1 ) ) } ) ) } onChange={ value => { setDraft( { ...draft, priority: value ?? 'normal' } ); } } /><Select label={ t( 'Assignee' ) } clearable searchable placeholder={ t( 'Unassigned' ) } value={ draft.assigneeId } data={ data.members.map( member => ( { value: member.id, label: member.name } ) ) } onChange={ value => { setDraft( { ...draft, assigneeId: value } ); } } /><TextInput label={ t( 'Due date' ) } type="date" value={ draft.dueDate?.slice( 0, 10 ) ?? '' } onChange={ event => { setDraft( { ...draft, dueDate: event.currentTarget.value ? `${ event.currentTarget.value }T23:59:59Z` : null } ); } } /></Stack></aside></div>
             </fieldset><Group className="modal-footer" justify="space-between"><Group gap="xs"><Tooltip label={ t( 'Delete ticket' ) }><ActionIcon color="red" variant="subtle" disabled={ busy } aria-label={ t( 'Delete ticket' ) } onClick={ () => { setConfirm( 'delete' ); } }><Trash2 size={ 17 } /></ActionIcon></Tooltip><Button variant="default" size="xs" disabled={ busy } leftSection={ draft.archived ? <ArchiveRestore size={ 15 } /> : <Archive size={ 15 } /> } onClick={ () => { void action( async () => { const saved = await saveDraft(); apply( await api<Ticket>( path, 'PUT', { ...ticketBody( saved ), archived: !saved.archived } ) ); onClose(); } ); } }>{ t( draft.archived ? 'Restore' : 'Archive' ) }</Button></Group><Button type="submit" loading={ busy } leftSection={ <Save size={ 15 } /> }>{ t( 'Save changes' ) }</Button></Group>
