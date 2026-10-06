@@ -198,12 +198,22 @@ public static class AuthEndpoints
             lock (store.Gate)
             {
                 var account = store.Accounts.FindById(id) ?? throw new ApiException(404, "Account not found.");
+                var boardIds = request.BoardIds?.Distinct().ToList();
+                var boardsExist = boardIds is null || boardIds.All(boardId => store.Boards.FindById(boardId) is not null);
+                if (!boardsExist)
+                {
+                    throw new ApiException(400, "Unknown board assignment.");
+                }
                 var lastAdmin = account.IsAdmin && request.Disabled && store.Accounts.FindAll().Count(user => user.IsAdmin && !user.Disabled) <= 1;
                 if (lastAdmin)
                 {
                     throw new ApiException(400, "Cannot disable the last administrator.");
                 }
                 account.Disabled = request.Disabled;
+                if (boardIds is not null)
+                {
+                    account.BoardIds = boardIds;
+                }
                 account.SecurityStamp = Guid.NewGuid().ToString("N");
                 account.FailedLogins = 0;
                 account.LockedUntil = null;

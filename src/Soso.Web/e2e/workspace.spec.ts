@@ -709,6 +709,13 @@ test( 'administrator account screen', async ( { page } ) =>
     await page.getByRole( 'button', { name: 'Create account' } ).click();
     await page.getByRole( 'tab', { name: 'Accounts', exact: true } ).click();
     await expect( page.getByText( 'New teammate', { exact: true } ) ).toBeVisible();
+    await page.getByRole( 'button', { name: 'Manage account: New teammate' } ).click();
+    const boards = page.getByPlaceholder( 'No boards selected' );
+    await boards.fill( 'Soso development' );
+    await page.getByRole( 'option', { name: 'Soso development' } ).click();
+    const update = page.waitForRequest( request => request.method() === 'PUT' && request.url().endsWith( '/admin/accounts/account-10' ) );
+    await page.getByRole( 'button', { name: 'Save account' } ).click();
+    expect( ( await update ).postDataJSON().boardIds ).toEqual( [ 'board-fixture' ] );
 } );
 
 for ( const viewport of [ { name: 'desktop', width: 1366, height: 900 }, { name: 'mobile', width: 390, height: 844 } ] )

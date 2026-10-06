@@ -1,4 +1,4 @@
-export type Account = { id: string; email: string; name: string; isAdmin: boolean; disabled: boolean; avatarId: string | null; theme: 'light' | 'dark'; settings: string; };
+export type Account = { id: string; email: string; name: string; isAdmin: boolean; disabled: boolean; avatarId: string | null; theme: 'light' | 'dark'; settings: string; boardIds: string[] | null; };
 export type Person = Pick<Account, 'id' | 'name' | 'avatarId'>;
 export type Column = { id: string; name: string; isDone: boolean; };
 export type Board = { id: string; name: string; description: string; icon: string; color: string; ownerId: string; members: string[]; columns: Column[]; revision: number; };

@@ -3,7 +3,7 @@ import type { Account, BoardData, Token } from '../src/api';
 
 export function fixture (): { account: Account; data: BoardData; }
 {
-    const account: Account = { id: 'admin-fixture', name: 'Maya Chen', email: 'maya@example.test', isAdmin: true, disabled: false, avatarId: null, theme: 'light', settings: '' };
+    const account: Account = { id: 'admin-fixture', name: 'Maya Chen', email: 'maya@example.test', isAdmin: true, disabled: false, avatarId: null, theme: 'light', settings: '', boardIds: null };
     const data: BoardData = {
         board: { id: 'board-fixture', name: 'Soso development', description: 'Sprint 01', icon: 'columns', color: 'teal', ownerId: account.id, members: [ 'sam-fixture' ], revision: 0, columns: [ { id: 'todo', name: 'To do', isDone: false }, { id: 'progress', name: 'In progress', isDone: false }, { id: 'done', name: 'Done', isDone: true } ] },
         members: [ account, { id: 'sam-fixture', name: 'Sam Rivers', avatarId: null } ], tickets: [],
@@ -107,9 +107,20 @@ export async function installApiMock ( page: Page, authenticated = true )
             if ( method === 'POST' )
             {
                 const input = request.postDataJSON();
-                const account = { ...state.account, ...input, id: `account-${ sequence++ }` };
+                const account = { ...state.account, boardIds: null, ...input, id: `account-${ sequence++ }` };
                 accounts.push( account );
                 return reply( account, 201 );
+            }
+            if ( method === 'PUT' )
+            {
+                const id = path.split( '/' ).at( -1 );
+                const account = accounts.find( item => item.id === id );
+                if ( !account )
+                {
+                    return reply( { detail: 'Account not found.' }, 404 );
+                }
+                Object.assign( account, request.postDataJSON() );
+                return reply( account );
             }
             return reply( accounts );
         }

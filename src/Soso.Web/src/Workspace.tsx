@@ -10,7 +10,7 @@ const Kanban = lazy( () => import( './Kanban' ).then( module => ( { default: mod
 const TicketModal = lazy( () => import( './TicketModal' ).then( module => ( { default: module.TicketModal } ) ) );
 const BoardModal = lazy( () => import( './BoardModal' ).then( module => ( { default: module.BoardModal } ) ) );
 const ProfileModal = lazy( () => import( './SettingsModals' ).then( module => ( { default: module.ProfileModal } ) ) );
-const AdminModal = lazy( () => import( './SettingsModals' ).then( module => ( { default: module.AdminModal } ) ) );
+const AdminModal = lazy( () => import( './AdminModal' ).then( module => ( { default: module.AdminModal } ) ) );
 const ArchiveModal = lazy( () => import( './ArchiveModal' ).then( module => ( { default: module.ArchiveModal } ) ) );
 
 function IconButton ( { label, children, onClick, expanded, controls }: { label: string; children: React.ReactNode; onClick: () => void; expanded?: boolean; controls?: string; } )

@@ -521,6 +521,35 @@ public sealed class SecurityTests
     }
 
     [Fact]
+    public async Task AdministratorsCanAssignAndRevokeAccountBoardAccess()
+    {
+        using var factory = new AppFactory();
+        using var admin = factory.Browser();
+        await Login(admin);
+        var member = await CreateUser(admin, "assigned@example.test");
+        var board = await CreateBoard(admin, "Assigned board");
+        using var user = factory.Browser();
+        await Login(user, member.Email);
+
+        Assert.Empty((await user.GetFromJsonAsync<Board[]>("/api/boards"))!);
+        var assign = await admin.PutAsJsonAsync($"/api/admin/accounts/{member.Id}", new { disabled = false, password = (string?)null, boardIds = new[] { board.Id } });
+        Assert.Equal(HttpStatusCode.OK, assign.StatusCode);
+
+        await Login(user, member.Email);
+        Assert.Contains((await user.GetFromJsonAsync<Board[]>("/api/boards"))!, item => item.Id == board.Id);
+        Assert.Equal(HttpStatusCode.OK, (await user.GetAsync($"/api/boards/{board.Id}")).StatusCode);
+
+        var revoke = await admin.PutAsJsonAsync($"/api/admin/accounts/{member.Id}", new { disabled = false, password = (string?)null, boardIds = Array.Empty<string>() });
+        Assert.Equal(HttpStatusCode.OK, revoke.StatusCode);
+        await Login(user, member.Email);
+        Assert.Empty((await user.GetFromJsonAsync<Board[]>("/api/boards"))!);
+        Assert.Equal(HttpStatusCode.NotFound, (await user.GetAsync($"/api/boards/{board.Id}")).StatusCode);
+
+        var invalid = await admin.PutAsJsonAsync($"/api/admin/accounts/{member.Id}", new { disabled = false, password = (string?)null, boardIds = new[] { "unknown" } });
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+    }
+
+    [Fact]
     public async Task RevokingTokensAndDisablingAccountsImmediatelyRemovesAccess()
     {
         using var factory = new AppFactory();

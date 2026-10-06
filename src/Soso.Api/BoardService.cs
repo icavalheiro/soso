@@ -34,7 +34,8 @@ public sealed class BoardService(Store store)
         var board = store.Boards.FindById(id);
         var userId = UserId(user);
         var tokenAllows = TokenAllowsBoard(id, user);
-        var canRead = board is not null && tokenAllows && (board.OwnerId == userId || board.Members.Contains(userId) || user.IsInRole("admin"));
+        var account = store.Accounts.FindById(userId);
+        var canRead = board is not null && tokenAllows && CanRead(board, account, userId, user);
         if (!canRead)
         {
             throw new ApiException(404, "Board not found.");
@@ -50,7 +51,21 @@ public sealed class BoardService(Store store)
     public Board[] List(ClaimsPrincipal user)
     {
         var id = UserId(user);
-        return store.Boards.FindAll().Where(board => TokenAllowsBoard(board.Id, user) && (board.OwnerId == id || board.Members.Contains(id) || user.IsInRole("admin"))).ToArray();
+        var account = store.Accounts.FindById(id);
+        return store.Boards.FindAll().Where(board => TokenAllowsBoard(board.Id, user) && CanRead(board, account, id, user)).ToArray();
+    }
+
+    private static bool CanRead(Board board, Account? account, string userId, ClaimsPrincipal user)
+    {
+        if (user.IsInRole("admin"))
+        {
+            return true;
+        }
+        if (account?.BoardIds is not null)
+        {
+            return account.BoardIds.Contains(board.Id);
+        }
+        return board.OwnerId == userId || board.Members.Contains(userId);
     }
 
     public BoardResponse Get(string id, ClaimsPrincipal user)

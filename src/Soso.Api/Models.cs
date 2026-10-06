@@ -14,6 +14,7 @@ public sealed class Account
     public string? AvatarId { get; set; }
     public string Theme { get; set; } = "light";
     public string Settings { get; set; } = "";
+    public List<string>? BoardIds { get; set; }
 }
 
 public sealed class Board

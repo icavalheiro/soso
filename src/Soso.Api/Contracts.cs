@@ -9,16 +9,16 @@ public sealed record LoginRequest([Required, EmailAddress, MaxLength(254)] strin
 /// <summary>Administrator-created account.</summary>
 public sealed record CreateAccountRequest([Required, EmailAddress, MaxLength(254)] string Email, [Required, MaxLength(80)] string Name, [Required, MinLength(14), MaxLength(128)] string Password, bool IsAdmin);
 /// <summary>Public account information.</summary>
-public sealed record AccountResponse(string Id, string Email, string Name, bool IsAdmin, bool Disabled, string? AvatarId, string Theme, string Settings)
+public sealed record AccountResponse(string Id, string Email, string Name, bool IsAdmin, bool Disabled, string? AvatarId, string Theme, string Settings, string[]? BoardIds)
 {
-    public static AccountResponse From(Account account) => new(account.Id, account.Email, account.Name, account.IsAdmin, account.Disabled, account.AvatarId, account.Theme, account.Settings);
+    public static AccountResponse From(Account account) => new(account.Id, account.Email, account.Name, account.IsAdmin, account.Disabled, account.AvatarId, account.Theme, account.Settings, account.BoardIds?.ToArray());
 }
 /// <summary>Editable personal preferences.</summary>
 public sealed record ProfileRequest([Required, MaxLength(80)] string Name, [Required, RegularExpression("^(light|dark)$")] string Theme, [Required(AllowEmptyStrings = true), MaxLength(4000)] string Settings);
 /// <summary>Password rotation with current-password verification.</summary>
 public sealed record PasswordRequest([Required, MaxLength(128)] string CurrentPassword, [Required, MinLength(14), MaxLength(128)] string NewPassword);
 /// <summary>Administrative account state and optional password reset.</summary>
-public sealed record AccountStateRequest(bool Disabled, [MinLength(14), MaxLength(128)] string? Password);
+public sealed record AccountStateRequest(bool Disabled, [MinLength(14), MaxLength(128)] string? Password, [MaxLength(1000)] string[]? BoardIds = null);
 /// <summary>Board title and description.</summary>
 public sealed record CreateBoardRequest([Required, MaxLength(80)] string Name, [Required(AllowEmptyStrings = true), MaxLength(2000)] string Description, [MaxLength(32)] string? Icon = null, [MaxLength(32)] string? Color = null);
 /// <summary>Board configuration and membership.</summary>
