@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ClipboardEvent } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -20,6 +20,9 @@ export function TicketModal ( { ticket, data, account, onClose, onChange, onDele
     const [ baseline, setBaseline ] = useState( JSON.stringify( ticketBody( ticket ) ) );
     const [ comment, setComment ] = useState( '' );
     const postingComment = useRef( false );
+    const savingDraft = useRef<Promise<Ticket> | null>( null );
+    const autoSaveTimer = useRef<number | null>( null);
+    const autoSave = useRef( () => {} );
     const [ subtask, setSubtask ] = useState( '' );
     const [ busy, setBusy ] = useState( false );
     const [ confirm, setConfirm ] = useState<'delete' | 'discard' | null>( null );
@@ -78,14 +81,35 @@ export function TicketModal ( { ticket, data, account, onClose, onChange, onDele
 
     async function saveDraft ()
     {
+        if ( autoSaveTimer.current !== null )
+        {
+            window.clearTimeout( autoSaveTimer.current );
+            autoSaveTimer.current = null;
+        }
+        if ( savingDraft.current )
+        {
+            return savingDraft.current;
+        }
         const dirty = JSON.stringify( ticketBody( draft ) ) !== baseline;
         if ( !dirty )
         {
             return draft;
         }
-        const result = await api<Ticket>( path, 'PUT', ticketBody( draft ) );
-        apply( result );
-        return result;
+        const request = api<Ticket>( path, 'PUT', ticketBody( draft ) );
+        savingDraft.current = request;
+        try
+        {
+            const result = await request;
+            apply( result );
+            return result;
+        }
+        finally
+        {
+            if ( savingDraft.current === request )
+            {
+                savingDraft.current = null;
+            }
+        }
     }
 
     async function action ( work: () => Promise<void> )
@@ -104,6 +128,29 @@ export function TicketModal ( { ticket, data, account, onClose, onChange, onDele
             setBusy( false );
         }
     }
+
+    autoSave.current = () => { void action( async () => { await saveDraft(); } ); };
+
+    useEffect( () =>
+    {
+        if ( JSON.stringify( ticketBody( draft ) ) === baseline )
+        {
+            return;
+        }
+        autoSaveTimer.current = window.setTimeout( () =>
+        {
+            autoSaveTimer.current = null;
+            autoSave.current();
+        }, 10_000 );
+        return () =>
+        {
+            if ( autoSaveTimer.current !== null )
+            {
+                window.clearTimeout( autoSaveTimer.current );
+                autoSaveTimer.current = null;
+            }
+        };
+    }, [ draft, baseline ] );
 
     function close ()
     {

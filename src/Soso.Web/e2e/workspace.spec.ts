@@ -599,6 +599,24 @@ test( 'ticket subtasks, comments and images', async ( { page } ) =>
     await expect( page.locator( '.ticket' ).filter( { hasText: 'Sketch the board layout' } ) ).toContainText( '1/1' );
 } );
 
+test( 'ticket edits are automatically saved after ten seconds of inactivity', async ( { page } ) =>
+{
+    const state = await installApiMock( page );
+    await page.goto( '/' );
+    await page.getByRole( 'button', { name: 'Open ticket: Sketch the board layout', exact: true } ).click();
+    await page.getByRole( 'button', { name: 'Edit title', exact: true } ).click();
+    await page.clock.install();
+    const title = page.getByRole( 'textbox', { name: 'Ticket title' } );
+    await title.fill( 'Edited ticket title' );
+    await page.clock.runFor( 5_000 );
+    expect( state.data.tickets[ 0 ].title ).toBe( 'Sketch the board layout' );
+    await title.fill( 'Automatically saved title' );
+    await page.clock.runFor( 9_999 );
+    expect( state.data.tickets[ 0 ].title ).toBe( 'Sketch the board layout' );
+    await page.clock.runFor( 1 );
+    await expect.poll( () => state.data.tickets[ 0 ].title ).toBe( 'Automatically saved title' );
+} );
+
 test( 'ticket subtasks can be reordered and saved', async ( { page } ) =>
 {
     const state = await installApiMock( page );
