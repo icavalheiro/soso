@@ -11,6 +11,7 @@ public sealed record DropboxCredentials(string AppKey, string AccessToken);
 public sealed class DropboxBackupService(Store store, IHttpClientFactory clients, IDataProtectionProvider protection, ILogger<DropboxBackupService> logger) : BackgroundService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions DropboxApiJsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
     private readonly IDataProtector protector = protection.CreateProtector("Soso.DropboxBackup.Credentials.v1");
     private readonly SemaphoreSlim backupGate = new(1, 1);
 
@@ -121,6 +122,7 @@ public sealed class DropboxBackupService(Store store, IHttpClientFactory clients
         using var startResponse = await SendUploadChunkAsync(
             credentials,
             "upload_session/start",
+            "starting upload session",
             new { close = false },
             [],
             cancellationToken);
@@ -136,6 +138,7 @@ public sealed class DropboxBackupService(Store store, IHttpClientFactory clients
             using var appendResponse = await SendUploadChunkAsync(
                 credentials,
                 "upload_session/append_v2",
+                $"uploading chunk at byte offset {offset}",
                 new { cursor = new { session_id = sessionId, offset }, close = false },
                 chunk,
                 cancellationToken);
@@ -148,6 +151,7 @@ public sealed class DropboxBackupService(Store store, IHttpClientFactory clients
         using var finishResponse = await SendUploadChunkAsync(
             credentials,
             "upload_session/finish",
+            "finishing upload session",
             new
             {
                 cursor = new { session_id = sessionId, offset },
@@ -157,24 +161,27 @@ public sealed class DropboxBackupService(Store store, IHttpClientFactory clients
             cancellationToken);
     }
 
-    private async Task<HttpResponseMessage> SendUploadChunkAsync(DropboxCredentials credentials, string endpoint, object arguments, byte[] content, CancellationToken cancellationToken)
+    private async Task<HttpResponseMessage> SendUploadChunkAsync(DropboxCredentials credentials, string endpoint, string phase, object arguments, byte[] content, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, $"https://content.dropboxapi.com/2/files/{endpoint}");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", credentials.AccessToken);
-        request.Headers.TryAddWithoutValidation("Dropbox-API-Arg", JsonSerializer.Serialize(arguments, JsonOptions));
+        request.Headers.TryAddWithoutValidation("Dropbox-API-Arg", JsonSerializer.Serialize(arguments, DropboxApiJsonOptions));
         request.Content = new ByteArrayContent(content);
         request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
         var response = await clients.CreateClient().SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
             var detail = await ReadDropboxErrorAsync(response, cancellationToken);
+            var requestId = response.Headers.TryGetValues("X-Dropbox-Request-Id", out var requestIds) ? requestIds.FirstOrDefault() : null;
+            logger.LogWarning("Dropbox returned HTTP {StatusCode} while {Phase}; request ID {DropboxRequestId}; error {DropboxError}",
+                (int)response.StatusCode, phase, requestId ?? "unavailable", detail ?? "no error details");
             var message = response.StatusCode switch
             {
                 System.Net.HttpStatusCode.Unauthorized => "Dropbox rejected the access token. Reconnect with a valid token.",
                 System.Net.HttpStatusCode.Forbidden => "Dropbox denied the upload. Ensure the app has the files.content.write permission and reconnect after changing permissions.",
                 (System.Net.HttpStatusCode)507 => "Dropbox storage is full. Free up Dropbox space and try again.",
-                _ when detail is not null => $"Dropbox returned HTTP {(int)response.StatusCode}: {detail}",
-                _ => $"Dropbox could not store the backup (HTTP {(int)response.StatusCode}). Check the app permissions and available Dropbox space."
+                _ when detail is not null => $"Dropbox returned HTTP {(int)response.StatusCode} while {phase}: {detail}{(requestId is null ? "" : $" (request ID {requestId})")}",
+                _ => $"Dropbox could not store the backup (HTTP {(int)response.StatusCode} while {phase}). Check the app permissions and available Dropbox space.{(requestId is null ? "" : $" Dropbox request ID: {requestId}.")}"
             };
             response.Dispose();
             throw new ApiException(502, message);
@@ -194,14 +201,55 @@ public sealed class DropboxBackupService(Store store, IHttpClientFactory clients
             using var document = JsonDocument.Parse(body);
             if (document.RootElement.TryGetProperty("error_summary", out var summary) && summary.ValueKind == JsonValueKind.String)
             {
-                return summary.GetString() is { Length: > 300 } value ? value[..300] : summary.GetString();
+                var summaryText = summary.GetString();
+                if (!string.IsNullOrWhiteSpace(summaryText) && summaryText != "other/...")
+                {
+                    return summaryText.Length > 300 ? summaryText[..300] : summaryText;
+                }
             }
-            return null;
+            if (document.RootElement.TryGetProperty("error", out var error))
+            {
+                var errorTags = GetDropboxErrorTags(error);
+                if (errorTags.Count > 0)
+                {
+                    return string.Join("/", errorTags);
+                }
+            }
+            return document.RootElement.TryGetProperty("error_summary", out var fallback) && fallback.ValueKind == JsonValueKind.String
+                ? fallback.GetString() is { Length: > 300 } value ? value[..300] : fallback.GetString()
+                : null;
         }
         catch (JsonException)
         {
             return null;
         }
+    }
+
+    private static List<string> GetDropboxErrorTags(JsonElement element)
+    {
+        var tags = new List<string>();
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            if (element.TryGetProperty(".tag", out var tag) && tag.ValueKind == JsonValueKind.String && tag.GetString() is { } value)
+            {
+                tags.Add(value);
+            }
+            foreach (var property in element.EnumerateObject())
+            {
+                if (property.Name != ".tag")
+                {
+                    tags.AddRange(GetDropboxErrorTags(property.Value));
+                }
+            }
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in element.EnumerateArray())
+            {
+                tags.AddRange(GetDropboxErrorTags(item));
+            }
+        }
+        return tags;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

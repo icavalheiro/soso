@@ -37,6 +37,7 @@ public sealed class AppFactory : WebApplicationFactory<Program>
     }
 }
 
+[Collection("LiteDB tests")]
 public sealed class SecurityTests
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
