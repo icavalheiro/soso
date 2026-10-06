@@ -93,7 +93,7 @@ public sealed class DropboxBackupService(Store store, IHttpClientFactory clients
             var message = exception switch
             {
                 ApiException => exception.Message,
-                HttpRequestException => "Could not connect to Dropbox. Check the server's internet connection and try again.",
+                HttpRequestException => "The connection to Dropbox's upload server was interrupted. Check that the server/container can make outbound HTTPS connections to content.dropboxapi.com on port 443, then try again.",
                 IOException => "Could not read or create the database backup file. Check the server's data directory and available disk space.",
                 _ => "Dropbox backup failed. Check the server logs for details."
             };
@@ -115,19 +115,56 @@ public sealed class DropboxBackupService(Store store, IHttpClientFactory clients
 
     private async Task UploadAsync(DropboxCredentials credentials, string path, CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, "https://content.dropboxapi.com/2/files/upload");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", credentials.AccessToken);
-        request.Headers.TryAddWithoutValidation("Dropbox-API-Arg", JsonSerializer.Serialize(new
+        const int chunkSize = 4 * 1024 * 1024;
+        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, chunkSize, FileOptions.Asynchronous | FileOptions.SequentialScan);
+
+        using var startResponse = await SendUploadChunkAsync(
+            credentials,
+            "upload_session/start",
+            new { close = false },
+            [],
+            cancellationToken);
+        using var startDocument = JsonDocument.Parse(await startResponse.Content.ReadAsStringAsync(cancellationToken));
+        var sessionId = startDocument.RootElement.GetProperty("session_id").GetString()
+            ?? throw new ApiException(502, "Dropbox did not return an upload session ID.");
+
+        long offset = 0;
+        while (stream.Length - offset > chunkSize)
         {
-            path = "/soso-backup.db",
-            mode = "overwrite",
-            autorename = false,
-            mute = true,
-            strict_conflict = false
-        }));
-        request.Content = new ByteArrayContent(await File.ReadAllBytesAsync(path, cancellationToken));
+            var chunk = new byte[chunkSize];
+            await stream.ReadExactlyAsync(chunk, cancellationToken);
+            using var appendResponse = await SendUploadChunkAsync(
+                credentials,
+                "upload_session/append_v2",
+                new { cursor = new { session_id = sessionId, offset }, close = false },
+                chunk,
+                cancellationToken);
+            offset += chunk.Length;
+        }
+
+        var remaining = checked((int)(stream.Length - offset));
+        var finalChunk = new byte[remaining];
+        await stream.ReadExactlyAsync(finalChunk, cancellationToken);
+        using var finishResponse = await SendUploadChunkAsync(
+            credentials,
+            "upload_session/finish",
+            new
+            {
+                cursor = new { session_id = sessionId, offset },
+                commit = new { path = "/soso-backup.db", mode = "overwrite", autorename = false, mute = true, strict_conflict = false }
+            },
+            finalChunk,
+            cancellationToken);
+    }
+
+    private async Task<HttpResponseMessage> SendUploadChunkAsync(DropboxCredentials credentials, string endpoint, object arguments, byte[] content, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"https://content.dropboxapi.com/2/files/{endpoint}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", credentials.AccessToken);
+        request.Headers.TryAddWithoutValidation("Dropbox-API-Arg", JsonSerializer.Serialize(arguments, JsonOptions));
+        request.Content = new ByteArrayContent(content);
         request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-        using var response = await clients.CreateClient().SendAsync(request, cancellationToken);
+        var response = await clients.CreateClient().SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
             var detail = await ReadDropboxErrorAsync(response, cancellationToken);
@@ -139,8 +176,10 @@ public sealed class DropboxBackupService(Store store, IHttpClientFactory clients
                 _ when detail is not null => $"Dropbox returned HTTP {(int)response.StatusCode}: {detail}",
                 _ => $"Dropbox could not store the backup (HTTP {(int)response.StatusCode}). Check the app permissions and available Dropbox space."
             };
+            response.Dispose();
             throw new ApiException(502, message);
         }
+        return response;
     }
 
     private static async Task<string?> ReadDropboxErrorAsync(HttpResponseMessage response, CancellationToken cancellationToken)
