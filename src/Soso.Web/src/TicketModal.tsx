@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ClipboardEvent } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ActionIcon, Avatar, Button, Checkbox, FileButton, Group, Modal, MultiSelect, Progress, Select, Stack, Text, Textarea, TextInput, Tooltip } from '@mantine/core';
@@ -116,6 +117,69 @@ export function TicketModal ( { ticket, data, account, onClose, onChange, onDele
         setSubtask( '' );
     }
 
+    async function uploadImages ( files: File[] )
+    {
+        await saveDraft();
+        const ids: string[] = [];
+        for ( const file of files )
+        {
+            if ( draft.images.length + ids.length >= 6 )
+            {
+                break;
+            }
+            const form = new FormData();
+            form.append( 'file', file );
+            const result = await api<Ticket>( `${ path }/images`, 'POST', form );
+            ids.push( result.images[ result.images.length - 1 ] );
+            apply( result );
+        }
+        return ids;
+    }
+
+    function handleImagePaste ( event: ClipboardEvent<HTMLTextAreaElement>, field: 'description' | 'comment' )
+    {
+        const files = Array.from( event.clipboardData.files ).filter( file => [ 'image/png', 'image/jpeg', 'image/webp' ].includes( file.type ) );
+        if ( files.length === 0 )
+        {
+            return;
+        }
+        event.preventDefault();
+        const textarea = event.currentTarget;
+        const value = field === 'description' ? draft.description : comment;
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        void action( async () =>
+        {
+            const ids = await uploadImages( files );
+            const reference = ids.map( id => `![${ t( 'Attached image' ) }](/api/images/${ id })` ).join( '\n\n' );
+            if ( !reference )
+            {
+                return;
+            }
+            const prefix = value.slice( 0, start );
+            const suffix = value.slice( end );
+            const inserted = `${ prefix }${ prefix && !prefix.endsWith( '\n' ) ? '\n\n' : '' }${ reference }${ suffix && !suffix.startsWith( '\n' ) ? '\n\n' : '' }${ suffix }`;
+            if ( field === 'description' )
+            {
+                setDraft( current => ( { ...current, description: inserted } ) );
+            }
+            else
+            {
+                setComment( inserted );
+            }
+        } );
+    }
+
+    function renderImageReference ( src: string | undefined, alt: string | undefined )
+    {
+        if ( !src?.startsWith( '/api/images/' ) )
+        {
+            return null;
+        }
+        const id = src.slice( '/api/images/'.length );
+        return <button type="button" className="ticket-inline-image" aria-label={ t( 'View attached image' ) } onClick={ () => { setPreview( id ); } }><img src={ imageUrl( id ) } alt={ alt || t( 'Ticket attachment' ) } onError={ event => { event.currentTarget.hidden = true; } } /></button>;
+    }
+
     return <Modal opened onClose={ close } title={ <span className="modal-ticket-label">{ t( 'Ticket' ).toUpperCase() } #{ ticket.id.slice( 0, 5 ).toUpperCase() }</span> } size={ 880 } centered closeOnClickOutside={ false } closeOnEscape={ !busy } withCloseButton={ !busy }>
         <form onSubmit={ event => { event.preventDefault(); void action( async () => { await saveDraft(); onClose(); } ); } }>
             <fieldset className="ticket-fieldset" disabled={ busy }>
@@ -132,19 +196,19 @@ export function TicketModal ( { ticket, data, account, onClose, onChange, onDele
                             </Tooltip>
                         </Group>
                         { editingDescription ?
-                            <Textarea aria-label={ t( 'Description' ) } placeholder={ t( 'Add a description' ) } minRows={ 4 } autosize maxRows={ 12 } maxLength={ 12000 } autoFocus value={ draft.description } onChange={ event => { setDraft( { ...draft, description: event.currentTarget.value } ); } } /> :
+                            <Textarea aria-label={ t( 'Description' ) } placeholder={ t( 'Add a description' ) } minRows={ 4 } autosize maxRows={ 12 } maxLength={ 12000 } autoFocus value={ draft.description } onChange={ event => { setDraft( { ...draft, description: event.currentTarget.value } ); } } onPaste={ event => { handleImagePaste( event, 'description' ); } } /> :
                             <div className="ticket-description-markdown">
-                                { draft.description.trim() ? <Markdown remarkPlugins={ [ remarkGfm ] } skipHtml>{ draft.description }</Markdown> : <Text size="sm" c="dimmed">{ t( 'No description' ) }</Text> }
+                                { draft.description.trim() ? <Markdown remarkPlugins={ [ remarkGfm ] } skipHtml components={ { img: ( { src, alt } ) => renderImageReference( src, alt ) } }>{ draft.description }</Markdown> : <Text size="sm" c="dimmed">{ t( 'No description' ) }</Text> }
                             </div> }
                     </section>
                     <section><Group justify="space-between" mb="sm"><Text size="sm" fw={ 600 }><CheckSquare size={ 15 } className="inline-icon" /> { t( 'Subtasks' ) }</Text><Text c="dimmed" size="xs">{ done } / { draft.subtasks.length }</Text></Group>{ draft.subtasks.length > 0 && <Progress size={ 4 } value={ done / draft.subtasks.length * 100 } mb="md" /> }<Stack gap={ 9 }>{ draft.subtasks.map( task => <Group key={ task.id } gap="xs" wrap="nowrap"><Checkbox aria-label={ `${ t( 'Complete' ) } ${ task.title }` } checked={ task.done } onChange={ event => { const checked = event.currentTarget.checked; setDraft( { ...draft, subtasks: draft.subtasks.map( item => item.id === task.id ? { ...item, done: checked } : item ) } ); } } /><TextInput aria-label={ t( 'Subtask title' ) } variant="unstyled" maxLength={ 300 } required value={ task.title } className={ task.done ? 'completed-task' : '' } style={ { flex: 1 } } onChange={ event => { const title = event.currentTarget.value; setDraft( { ...draft, subtasks: draft.subtasks.map( item => item.id === task.id ? { ...item, title } : item ) } ); } } /><Tooltip label={ t( 'Remove subtask' ) }><ActionIcon aria-label={ t( 'Remove subtask' ) } color="gray" variant="subtle" onClick={ () => { setDraft( { ...draft, subtasks: draft.subtasks.filter( item => item.id !== task.id ) } ); } }><Trash2 size={ 14 } /></ActionIcon></Tooltip></Group> ) }</Stack><Group gap="xs" mt="sm" wrap="nowrap"><TextInput aria-label={ t( 'New subtask' ) } placeholder={ t( 'Add a subtask' ) } maxLength={ 300 } value={ subtask } style={ { flex: 1 } } onChange={ event => { setSubtask( event.currentTarget.value ); } } onKeyDown={ event => { if ( event.key === 'Enter' ) { event.preventDefault(); addSubtask(); } } } /><Tooltip label={ t( 'Add subtask' ) }><ActionIcon aria-label={ t( 'Add subtask' ) } size="lg" variant="light" disabled={ draft.subtasks.length >= 100 || !subtask.trim() } onClick={ addSubtask }><Plus size={ 18 } /></ActionIcon></Tooltip></Group></section>
-                    <section><Group justify="space-between" mb="sm"><Text size="sm" fw={ 600 }>{ t( 'Images' ) }</Text><FileButton accept="image/png,image/jpeg,image/webp" onChange={ file => { if ( !file ) { return; } void action( async () => { await saveDraft(); const form = new FormData(); form.append( 'file', file ); apply( await api<Ticket>( `${ path }/images`, 'POST', form ) ); } ); } }>{ props => <Button { ...props } size="xs" variant="subtle" disabled={ busy || draft.images.length >= 6 } leftSection={ <ImagePlus size={ 15 } /> }>{ t( 'Add image' ) }</Button> }</FileButton></Group><div className="attachment-grid">{ draft.images.map( id => <div className="attachment" key={ id }><button type="button" aria-label={ t( 'View attached image' ) } onClick={ () => { setPreview( id ); } }><img src={ imageUrl( id ) } alt={ t( 'Ticket attachment' ) } /></button><Tooltip label={ t( 'Remove image' ) }><ActionIcon className="attachment-remove" aria-label={ t( 'Remove image' ) } size="sm" color="red" variant="filled" onClick={ () => { void action( async () => { await saveDraft(); apply( await api<Ticket>( `${ path }/images/${ id }`, 'DELETE' ) ); } ); } }><Trash2 size={ 13 } /></ActionIcon></Tooltip></div> ) }</div></section>
+                    <section><Group justify="space-between" mb="sm"><Text size="sm" fw={ 600 }>{ t( 'Images' ) }</Text><FileButton accept="image/png,image/jpeg,image/webp" onChange={ file => { if ( !file ) { return; } void action( async () => { await uploadImages( [ file ] ); } ); } }>{ props => <Button { ...props } size="xs" variant="subtle" disabled={ busy || draft.images.length >= 6 } leftSection={ <ImagePlus size={ 15 } /> }>{ t( 'Add image' ) }</Button> }</FileButton></Group><div className="attachment-grid">{ draft.images.map( id => <div className="attachment" key={ id }><button type="button" aria-label={ t( 'View attached image' ) } onClick={ () => { setPreview( id ); } }><img src={ imageUrl( id ) } alt={ t( 'Ticket attachment' ) } onError={ event => { event.currentTarget.hidden = true; } } /></button><Tooltip label={ t( 'Remove image' ) }><ActionIcon className="attachment-remove" aria-label={ t( 'Remove image' ) } size="sm" color="red" variant="filled" onClick={ () => { void action( async () => { await saveDraft(); apply( await api<Ticket>( `${ path }/images/${ id }`, 'DELETE' ) ); } ); } }><Trash2 size={ 13 } /></ActionIcon></Tooltip></div> ) }</div></section>
                     <section><Text size="sm" fw={ 600 } mb="md"><MessageSquare size={ 15 } className="inline-icon" /> { t( 'Comments' ) }</Text><Stack gap="md">{ draft.comments.map( item =>
                     {
                         const author = data.members.find( member => member.id === item.authorId );
                         const canDelete = item.authorId === account.id || account.isAdmin;
-                        return <div className="comment" key={ item.id }><Avatar size={ 28 } radius="xl" src={ imageUrl( author?.avatarId ) }>{ author?.name.slice( 0, 1 ) ?? '?' }</Avatar><div className="comment-body"><Group justify="space-between" gap="xs"><Text size="xs" fw={ 600 }>{ author?.name ?? t( 'Former member' ) }</Text><Text size="xs" c="dimmed">{ new Date( item.createdAt ).toLocaleString( undefined, { dateStyle: 'short', timeStyle: 'short' } ) }</Text></Group><p>{ item.text }</p></div>{ canDelete && <Tooltip label={ t( 'Delete comment' ) }><ActionIcon aria-label={ t( 'Delete comment' ) } variant="subtle" color="gray" size="sm" onClick={ () => { void action( async () => { await saveDraft(); apply( await api<Ticket>( `${ path }/comments/${ item.id }`, 'DELETE' ) ); } ); } }><Trash2 size={ 13 } /></ActionIcon></Tooltip> }</div>;
-                    } ) }<Textarea aria-label={ t( 'New comment' ) } placeholder={ t( 'Write a comment' ) } description={ t( 'Press Ctrl + Enter to post' ) } minRows={ 2 } maxLength={ 4000 } value={ comment } onChange={ event => { setComment( event.currentTarget.value ); } } onKeyDown={ event => { if ( event.key === 'Enter' && ( event.ctrlKey || event.metaKey ) ) { event.preventDefault(); postComment(); } } } /><Group justify="flex-end"><Button size="xs" variant="light" leftSection={ <Send size={ 14 } /> } disabled={ !comment.trim() } onClick={ postComment }>{ t( 'Post comment' ) }</Button></Group></Stack></section>
+                        return <div className="comment" key={ item.id }><Avatar size={ 28 } radius="xl" src={ imageUrl( author?.avatarId ) }>{ author?.name.slice( 0, 1 ) ?? '?' }</Avatar><div className="comment-body"><Group justify="space-between" gap="xs"><Text size="xs" fw={ 600 }>{ author?.name ?? t( 'Former member' ) }</Text><Text size="xs" c="dimmed">{ new Date( item.createdAt ).toLocaleString( undefined, { dateStyle: 'short', timeStyle: 'short' } ) }</Text></Group><div className="comment-markdown"><Markdown remarkPlugins={ [ remarkGfm ] } skipHtml components={ { img: ( { src, alt } ) => renderImageReference( src, alt ), a: ( { children } ) => <span>{ children }</span>, input: () => null } }>{ item.text }</Markdown></div></div>{ canDelete && <Tooltip label={ t( 'Delete comment' ) }><ActionIcon aria-label={ t( 'Delete comment' ) } variant="subtle" color="gray" size="sm" onClick={ () => { void action( async () => { await saveDraft(); apply( await api<Ticket>( `${ path }/comments/${ item.id }`, 'DELETE' ) ); } ); } }><Trash2 size={ 13 } /></ActionIcon></Tooltip> }</div>;
+                    } ) }<Textarea aria-label={ t( 'New comment' ) } placeholder={ t( 'Write a comment' ) } description={ t( 'Press Ctrl + Enter to post' ) } minRows={ 2 } maxLength={ 4000 } value={ comment } onChange={ event => { setComment( event.currentTarget.value ); } } onPaste={ event => { handleImagePaste( event, 'comment' ); } } onKeyDown={ event => { if ( event.key === 'Enter' && ( event.ctrlKey || event.metaKey ) ) { event.preventDefault(); postComment(); } } } /><Group justify="flex-end"><Button size="xs" variant="light" leftSection={ <Send size={ 14 } /> } disabled={ !comment.trim() } onClick={ postComment }>{ t( 'Post comment' ) }</Button></Group></Stack></section>
                     <details className="ticket-activity"><summary><Group gap="xs"><ChevronDown size={ 15 } /><Text size="sm" fw={ 600 }>{ t( 'Activity history' ) }</Text><Text size="xs" c="dimmed">{ draft.activity?.length ?? 0 }</Text></Group></summary><Stack gap="sm" mt="md">{ [ ...( draft.activity ?? [] ) ].reverse().map( item => <div className="activity-item" key={ item.id }><Avatar size={ 24 } radius="xl">{ item.actorName.slice( 0, 1 ).toUpperCase() }</Avatar><div className="activity-body"><Text size="xs"><strong>{ item.actorName }</strong> { activityText( item ) }</Text>{ item.action === 'comment_added' && item.newValue && <Text size="xs" c="dimmed" className="activity-detail">{ item.newValue }</Text> }<Text size="xs" c="dimmed">{ new Date( item.createdAt ).toLocaleString( undefined, { dateStyle: 'medium', timeStyle: 'short' } ) }</Text></div></div> ) }</Stack></details>
                 </Stack></div><aside className="ticket-properties"><Stack><Select label={ t( 'Status' ) } value={ draft.columnId } allowDeselect={ false } data={ data.board.columns.map( column => ( { value: column.id, label: column.name } ) ) } onChange={ value => { setDraft( { ...draft, columnId: value ?? draft.columnId } ); } } /><Select label={ t( 'Priority' ) } value={ draft.priority } allowDeselect={ false } data={ [ 'low', 'normal', 'high', 'urgent' ].map( value => ( { value, label: t( value[ 0 ].toUpperCase() + value.slice( 1 ) ) } ) ) } onChange={ value => { setDraft( { ...draft, priority: value ?? 'normal' } ); } } /><Select label={ t( 'Assignee' ) } clearable searchable placeholder={ t( 'Unassigned' ) } value={ draft.assigneeId } data={ data.members.map( member => ( { value: member.id, label: member.name } ) ) } onChange={ value => { setDraft( { ...draft, assigneeId: value } ); } } /><TextInput label={ t( 'Due date' ) } type="date" value={ draft.dueDate?.slice( 0, 10 ) ?? '' } onChange={ event => { setDraft( { ...draft, dueDate: event.currentTarget.value ? `${ event.currentTarget.value }T23:59:59Z` : null } ); } } /></Stack></aside></div>
             </fieldset><Group className="modal-footer" justify="space-between"><Group gap="xs"><Tooltip label={ t( 'Delete ticket' ) }><ActionIcon color="red" variant="subtle" disabled={ busy } aria-label={ t( 'Delete ticket' ) } onClick={ () => { setConfirm( 'delete' ); } }><Trash2 size={ 17 } /></ActionIcon></Tooltip><Button variant="default" size="xs" disabled={ busy } leftSection={ draft.archived ? <ArchiveRestore size={ 15 } /> : <Archive size={ 15 } /> } onClick={ () => { void action( async () => { const saved = await saveDraft(); apply( await api<Ticket>( path, 'PUT', { ...ticketBody( saved ), archived: !saved.archived } ) ); onClose(); } ); } }>{ t( draft.archived ? 'Restore' : 'Archive' ) }</Button></Group><Button type="submit" loading={ busy } leftSection={ <Save size={ 15 } /> }>{ t( 'Save changes' ) }</Button></Group>

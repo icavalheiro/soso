@@ -593,6 +593,36 @@ test( 'ticket subtasks, comments and images', async ( { page } ) =>
     await expect( page.locator( '.ticket' ).filter( { hasText: 'Sketch the board layout' } ) ).toContainText( '1/1' );
 } );
 
+test( 'pasting images into ticket descriptions and comments keeps the ticket modal usable', async ( { page } ) =>
+{
+    const state = await installApiMock( page );
+    const failures: string[] = [];
+    page.on( 'pageerror', error => { failures.push( error.message ); } );
+    await page.goto( '/' );
+    await page.getByRole( 'button', { name: 'Open ticket: Sketch the board layout', exact: true } ).click();
+
+    async function pasteImage ( label: string )
+    {
+        await page.getByRole( 'textbox', { name: label, exact: true } ).evaluate( ( textarea, fileBytes ) =>
+        {
+            const transfer = new DataTransfer();
+            transfer.items.add( new File( [ new Uint8Array( fileBytes ) ], 'pasted.png', { type: 'image/png' } ) );
+            textarea.dispatchEvent( new ClipboardEvent( 'paste', { bubbles: true, clipboardData: transfer } ) );
+        }, [ 1, 2, 3 ] );
+    }
+
+    await page.getByRole( 'button', { name: 'Edit description', exact: true } ).click();
+    await pasteImage( 'Description' );
+    await expect.poll( async () => await page.getByRole( 'textbox', { name: 'Description', exact: true } ).inputValue() ).toContain( '/api/images/image-' );
+    await pasteImage( 'New comment' );
+    await expect.poll( async () => await page.getByRole( 'textbox', { name: 'New comment', exact: true } ).inputValue() ).toContain( '/api/images/image-' );
+    await page.getByLabel( 'New comment', { exact: true } ).press( 'Control+Enter' );
+    await expect( page.locator( '.comment-markdown .ticket-inline-image img' ) ).toBeVisible();
+    await expect( page.getByRole( 'dialog' ) ).toBeVisible();
+    expect( state.data.tickets[ 0 ].images ).toHaveLength( 2 );
+    expect( failures ).toEqual( [] );
+} );
+
 test( 'tickets without descriptions open after switching boards', async ( { page } ) =>
 {
     const state = await installApiMock( page );
