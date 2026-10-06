@@ -11,7 +11,7 @@ public sealed class ApiException(int status, string message) : Exception(message
 public sealed class BoardService(Store store)
 {
     public static readonly string[] AllowedTags = ["bug", "feature", "design", "docs", "refactor", "test", "chore", "research"];
-    public static readonly string[] AllowedIcons = ["columns", "briefcase", "house", "heart", "star", "rocket", "code", "book", "graduation-cap", "plane", "wallet", "target"];
+    public static readonly string[] AllowedIcons = ["columns", "briefcase", "house", "heart", "star", "rocket", "code", "book", "graduation-cap", "plane", "wallet", "target", "calendar", "shopping", "music", "fitness", "team", "ideas", "nature", "coffee"];
     public static readonly string[] AllowedColors = ["teal", "blue", "cyan", "green", "grape", "pink", "orange", "gray"];
     public static string UserId(ClaimsPrincipal user) => user.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new ApiException(401, "Sign in required.");
 

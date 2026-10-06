@@ -1,4 +1,4 @@
-import { BookOpen, Briefcase, Check, Code, Columns3, GraduationCap, Heart, House, Plane, Rocket, Star, Target, Wallet } from 'lucide-react';
+import { BookOpen, Briefcase, CalendarDays, Check, Code, Columns3, Coffee, Dumbbell, GraduationCap, Heart, House, Leaf, Lightbulb, Music, Plane, Rocket, ShoppingCart, Star, Target, Users, Wallet } from 'lucide-react';
 import { ActionIcon, ColorSwatch, Group, Stack, Text, Tooltip, useComputedColorScheme, useMantineTheme } from '@mantine/core';
 
 const boardColors = [
@@ -25,6 +25,14 @@ const boardIcons = [
     { value: 'plane', label: 'Travel', Icon: Plane },
     { value: 'wallet', label: 'Finances', Icon: Wallet },
     { value: 'target', label: 'Goals', Icon: Target },
+    { value: 'calendar', label: 'Calendar', Icon: CalendarDays },
+    { value: 'shopping', label: 'Shopping', Icon: ShoppingCart },
+    { value: 'music', label: 'Music', Icon: Music },
+    { value: 'fitness', label: 'Fitness', Icon: Dumbbell },
+    { value: 'team', label: 'Team', Icon: Users },
+    { value: 'ideas', label: 'Ideas', Icon: Lightbulb },
+    { value: 'nature', label: 'Nature', Icon: Leaf },
+    { value: 'coffee', label: 'Coffee', Icon: Coffee },
 ];
 
 function useBoardColor ( color: string )
