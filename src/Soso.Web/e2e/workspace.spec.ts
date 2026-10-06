@@ -599,6 +599,31 @@ test( 'ticket subtasks, comments and images', async ( { page } ) =>
     await expect( page.locator( '.ticket' ).filter( { hasText: 'Sketch the board layout' } ) ).toContainText( '1/1' );
 } );
 
+test( 'ticket subtasks can be reordered and saved', async ( { page } ) =>
+{
+    const state = await installApiMock( page );
+    await page.goto( '/' );
+    await page.getByRole( 'button', { name: 'Open ticket: Sketch the board layout', exact: true } ).click();
+
+    for ( const title of [ 'First subtask', 'Second subtask' ] )
+    {
+        await page.getByLabel( 'New subtask', { exact: true } ).fill( title );
+        await page.getByRole( 'button', { name: 'Add subtask', exact: true } ).click();
+    }
+
+    const moveHandle = page.getByRole( 'button', { name: 'Move subtask: First subtask', exact: true } );
+    await moveHandle.focus();
+    await page.keyboard.press( 'Space' );
+    await page.keyboard.press( 'ArrowDown' );
+    await page.keyboard.press( 'Space' );
+
+    const subtaskTitles = page.locator( '.subtask-row input[aria-label="Subtask title"]' );
+    await expect( subtaskTitles.nth( 0 ) ).toHaveValue( 'Second subtask' );
+    await expect( subtaskTitles.nth( 1 ) ).toHaveValue( 'First subtask' );
+    await page.getByRole( 'button', { name: 'Save changes', exact: true } ).click();
+    expect( state.data.tickets[ 0 ].subtasks.map( task => task.title ) ).toEqual( [ 'Second subtask', 'First subtask' ] );
+} );
+
 test( 'pasting images into ticket descriptions and comments keeps the ticket modal usable', async ( { page } ) =>
 {
     const state = await installApiMock( page );

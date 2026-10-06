@@ -784,6 +784,17 @@ button:focus-visible {
     text-decoration: line-through;
     color: var(--muted);
 }
+.subtask-row {
+    min-width: 0;
+}
+.subtask-drag-handle {
+    flex-shrink: 0;
+    cursor: grab;
+    touch-action: none;
+}
+.subtask-drag-handle:active {
+    cursor: grabbing;
+}
 .attachment-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));

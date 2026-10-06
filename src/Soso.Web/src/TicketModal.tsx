@@ -2,10 +2,14 @@ import { useRef, useState } from 'react';
 import type { ClipboardEvent } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
+import type { DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { ActionIcon, Avatar, Button, Checkbox, FileButton, Group, Modal, MultiSelect, Progress, Select, Stack, Text, Textarea, TextInput, Tooltip } from '@mantine/core';
-import { Archive, ArchiveRestore, CheckSquare, ChevronDown, Eye, ImagePlus, MessageSquare, Pencil, Plus, Save, Send, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, CheckSquare, ChevronDown, Eye, GripVertical, ImagePlus, MessageSquare, Pencil, Plus, Save, Send, Trash2 } from 'lucide-react';
 import { api, imageUrl, newId, ticketBody, tags } from './api';
-import type { Account, BoardData, Ticket } from './api';
+import type { Account, BoardData, Subtask, Ticket } from './api';
 import { reportError } from './feedback';
 import { useLanguage } from './useLanguage';
 
@@ -21,6 +25,7 @@ export function TicketModal ( { ticket, data, account, onClose, onChange, onDele
     const [ confirm, setConfirm ] = useState<'delete' | 'discard' | null>( null );
     const [ preview, setPreview ] = useState<string | null>( null );
     const [ editingDescription, setEditingDescription ] = useState( false );
+    const subtaskSensors = useSensors( useSensor( PointerSensor, { activationConstraint: { distance: 6 } } ), useSensor( KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates } ) );
     const path = `/boards/${ ticket.boardId }/tickets/${ ticket.id }`;
     const done = draft.subtasks.filter( task => task.done ).length;
 
@@ -121,6 +126,17 @@ export function TicketModal ( { ticket, data, account, onClose, onChange, onDele
         setSubtask( '' );
     }
 
+    function reorderSubtasks ( event: DragEndEvent )
+    {
+        const { active, over } = event;
+        if ( over && active.id !== over.id )
+        {
+            const oldIndex = draft.subtasks.findIndex( task => task.id === active.id );
+            const newIndex = draft.subtasks.findIndex( task => task.id === over.id );
+            setDraft( current => ( { ...current, subtasks: arrayMove( current.subtasks, oldIndex, newIndex ) } ) );
+        }
+    }
+
     async function uploadImages ( files: File[] )
     {
         await saveDraft();
@@ -205,7 +221,7 @@ export function TicketModal ( { ticket, data, account, onClose, onChange, onDele
                                 { ( draft.description ?? '' ).trim() ? <Markdown remarkPlugins={ [ remarkGfm ] } skipHtml components={ { img: ( { src, alt } ) => renderImageReference( src, alt ) } }>{ draft.description ?? '' }</Markdown> : <Text size="sm" c="dimmed">{ t( 'No description' ) }</Text> }
                             </div> }
                     </section>
-                    <section><Group justify="space-between" mb="sm"><Text size="sm" fw={ 600 }><CheckSquare size={ 15 } className="inline-icon" /> { t( 'Subtasks' ) }</Text><Text c="dimmed" size="xs">{ done } / { draft.subtasks.length }</Text></Group>{ draft.subtasks.length > 0 && <Progress size={ 4 } value={ done / draft.subtasks.length * 100 } mb="md" /> }<Stack gap={ 9 }>{ draft.subtasks.map( task => <Group key={ task.id } gap="xs" wrap="nowrap"><Checkbox aria-label={ `${ t( 'Complete' ) } ${ task.title }` } checked={ task.done } onChange={ event => { const checked = event.currentTarget.checked; setDraft( { ...draft, subtasks: draft.subtasks.map( item => item.id === task.id ? { ...item, done: checked } : item ) } ); } } /><TextInput aria-label={ t( 'Subtask title' ) } variant="unstyled" maxLength={ 300 } required value={ task.title } className={ task.done ? 'completed-task' : '' } style={ { flex: 1 } } onChange={ event => { const title = event.currentTarget.value; setDraft( { ...draft, subtasks: draft.subtasks.map( item => item.id === task.id ? { ...item, title } : item ) } ); } } /><Tooltip label={ t( 'Remove subtask' ) }><ActionIcon aria-label={ t( 'Remove subtask' ) } color="gray" variant="subtle" onClick={ () => { setDraft( { ...draft, subtasks: draft.subtasks.filter( item => item.id !== task.id ) } ); } }><Trash2 size={ 14 } /></ActionIcon></Tooltip></Group> ) }</Stack><Group gap="xs" mt="sm" wrap="nowrap"><TextInput aria-label={ t( 'New subtask' ) } placeholder={ t( 'Add a subtask' ) } maxLength={ 300 } value={ subtask } style={ { flex: 1 } } onChange={ event => { setSubtask( event.currentTarget.value ); } } onKeyDown={ event => { if ( event.key === 'Enter' ) { event.preventDefault(); addSubtask(); } } } /><Tooltip label={ t( 'Add subtask' ) }><ActionIcon aria-label={ t( 'Add subtask' ) } size="lg" variant="light" disabled={ draft.subtasks.length >= 100 || !subtask.trim() } onClick={ addSubtask }><Plus size={ 18 } /></ActionIcon></Tooltip></Group></section>
+                    <section><Group justify="space-between" mb="sm"><Text size="sm" fw={ 600 }><CheckSquare size={ 15 } className="inline-icon" /> { t( 'Subtasks' ) }</Text><Text c="dimmed" size="xs">{ done } / { draft.subtasks.length }</Text></Group>{ draft.subtasks.length > 0 && <Progress size={ 4 } value={ done / draft.subtasks.length * 100 } mb="md" /> }<DndContext sensors={ subtaskSensors } collisionDetection={ closestCenter } onDragEnd={ reorderSubtasks }><SortableContext items={ draft.subtasks.map( task => task.id ) } strategy={ verticalListSortingStrategy }><Stack gap={ 9 }>{ draft.subtasks.map( task => <SortableSubtask key={ task.id } task={ task } t={ t } onChange={ updated => { setDraft( current => ( { ...current, subtasks: current.subtasks.map( item => item.id === updated.id ? updated : item ) } ) ); } } onRemove={ id => { setDraft( current => ( { ...current, subtasks: current.subtasks.filter( item => item.id !== id ) } ) ); } } /> ) }</Stack></SortableContext></DndContext><Group gap="xs" mt="sm" wrap="nowrap"><TextInput aria-label={ t( 'New subtask' ) } placeholder={ t( 'Add a subtask' ) } maxLength={ 300 } value={ subtask } style={ { flex: 1 } } onChange={ event => { setSubtask( event.currentTarget.value ); } } onKeyDown={ event => { if ( event.key === 'Enter' ) { event.preventDefault(); addSubtask(); } } } /><Tooltip label={ t( 'Add subtask' ) }><ActionIcon aria-label={ t( 'Add subtask' ) } size="lg" variant="light" disabled={ draft.subtasks.length >= 100 || !subtask.trim() } onClick={ addSubtask }><Plus size={ 18 } /></ActionIcon></Tooltip></Group></section>
                     <section><Group justify="space-between" mb="sm"><Text size="sm" fw={ 600 }>{ t( 'Images' ) }</Text><FileButton accept="image/png,image/jpeg,image/webp" onChange={ file => { if ( !file ) { return; } void action( async () => { await uploadImages( [ file ] ); } ); } }>{ props => <Button { ...props } size="xs" variant="subtle" disabled={ busy || draft.images.length >= 6 } leftSection={ <ImagePlus size={ 15 } /> }>{ t( 'Add image' ) }</Button> }</FileButton></Group><div className="attachment-grid">{ draft.images.map( id => <div className="attachment" key={ id }><button type="button" aria-label={ t( 'View attached image' ) } onClick={ () => { setPreview( id ); } }><img src={ imageUrl( id ) } alt={ t( 'Ticket attachment' ) } onError={ event => { event.currentTarget.hidden = true; } } /></button><Tooltip label={ t( 'Remove image' ) }><ActionIcon className="attachment-remove" aria-label={ t( 'Remove image' ) } size="sm" color="red" variant="filled" onClick={ () => { void action( async () => { await saveDraft(); apply( await api<Ticket>( `${ path }/images/${ id }`, 'DELETE' ) ); } ); } }><Trash2 size={ 13 } /></ActionIcon></Tooltip></div> ) }</div></section>
                     <section><Text size="sm" fw={ 600 } mb="md"><MessageSquare size={ 15 } className="inline-icon" /> { t( 'Comments' ) }</Text><Stack gap="md">{ draft.comments.map( item =>
                     {
@@ -220,4 +236,15 @@ export function TicketModal ( { ticket, data, account, onClose, onChange, onDele
         <Modal opened={ confirm !== null } onClose={ () => { setConfirm( null ); } } title={ t( confirm === 'delete' ? 'Delete ticket?' : 'Discard changes?' ) } centered><Stack><Text size="sm">{ t( confirm === 'delete' ? 'The ticket, comments and images will be permanently deleted.' : 'Your unsaved changes will be lost.' ) }</Text><Group justify="flex-end"><Button variant="default" onClick={ () => { setConfirm( null ); } }>{ t( 'Cancel' ) }</Button><Button color="red" loading={ busy } onClick={ () => { if ( confirm === 'discard' ) { onClose(); return; } void action( async () => { await api( path, 'DELETE' ); onDelete( ticket.id ); } ); } }>{ t( confirm === 'delete' ? 'Delete permanently' : 'Discard' ) }</Button></Group></Stack></Modal>
         <Modal opened={ preview !== null } onClose={ () => { setPreview( null ); } } title={ t( 'Attached image' ) } size="xl" centered>{ preview && <img className="image-preview" src={ imageUrl( preview ) } alt={ t( 'Ticket attachment' ) } /> }</Modal>
     </Modal>;
+}
+
+function SortableSubtask ( { task, t, onChange, onRemove }: { task: Subtask; t: ( text: string ) => string; onChange: ( task: Subtask ) => void; onRemove: ( id: string ) => void; } )
+{
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable( { id: task.id } );
+    return <Group ref={ setNodeRef } gap="xs" wrap="nowrap" className="subtask-row" style={ { transform: CSS.Transform.toString( transform ), transition, opacity: isDragging ? 0.45 : 1 } }>
+        <Tooltip label={ t( 'Move subtask' ) }><ActionIcon aria-label={ `${ t( 'Move subtask' ) }: ${ task.title }` } className="subtask-drag-handle" color="gray" variant="subtle" { ...attributes } { ...listeners }><GripVertical size={ 15 } /></ActionIcon></Tooltip>
+        <Checkbox aria-label={ `${ t( 'Complete' ) } ${ task.title }` } checked={ task.done } onChange={ event => { onChange( { ...task, done: event.currentTarget.checked } ); } } />
+        <TextInput aria-label={ t( 'Subtask title' ) } variant="unstyled" maxLength={ 300 } required value={ task.title } className={ task.done ? 'completed-task' : '' } style={ { flex: 1 } } onChange={ event => { onChange( { ...task, title: event.currentTarget.value } ); } } />
+        <Tooltip label={ t( 'Remove subtask' ) }><ActionIcon aria-label={ t( 'Remove subtask' ) } color="gray" variant="subtle" onClick={ () => { onRemove( task.id ); } }><Trash2 size={ 14 } /></ActionIcon></Tooltip>
+    </Group>;
 }
