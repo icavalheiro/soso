@@ -576,6 +576,7 @@ public sealed class SecurityTests
         Assert.Contains("create_tickets", body);
         Assert.Contains("update_tickets", body);
         Assert.Contains("search_tickets", body);
+        Assert.Contains("get_ticket_history", body);
         Assert.DoesNotContain("CreateAccount", body);
         var discoveredTools = McpMessage(body).GetProperty("result").GetProperty("tools").EnumerateArray().ToArray();
         var createSchema = discoveredTools.Single(tool => tool.GetProperty("name").GetString() == "create_ticket").GetProperty("inputSchema");
@@ -631,6 +632,12 @@ public sealed class SecurityTests
         Assert.Equal(updated[0].Description, priorityUpdated.Description);
         Assert.Equal(updated[0].Tags, priorityUpdated.Tags);
         Assert.Equal(updated[0].Revision + 1, priorityUpdated.Revision);
+        using var history = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 17, method = "tools/call", @params = new { name = "get_ticket_history", arguments = new { boardId = board.Id, ticketId = priorityUpdated.Id } } });
+        Assert.Equal(HttpStatusCode.OK, history.StatusCode);
+        var historyBody = await history.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("\"isError\":true", historyBody);
+        Assert.Contains("created", historyBody);
+        Assert.Contains("field_changed", historyBody);
         using var search = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 6, method = "tools/call", @params = new { name = "search_tickets", arguments = new { query = "NEEDLE", limit = 1 } } });
         Assert.Equal(HttpStatusCode.OK, search.StatusCode);
         var searchBody = await search.Content.ReadAsStringAsync();
@@ -643,6 +650,8 @@ public sealed class SecurityTests
         Assert.Contains("\"isError\":true", await removedRead.Content.ReadAsStringAsync());
         using var removedSearch = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 13, method = "tools/call", @params = new { name = "search_tickets", arguments = new { query = "NEEDLE" } } });
         Assert.DoesNotContain("MCP batch first", await removedSearch.Content.ReadAsStringAsync());
+        using var removedHistory = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 18, method = "tools/call", @params = new { name = "get_ticket_history", arguments = new { boardId = board.Id, ticketId = priorityUpdated.Id } } });
+        Assert.Contains("\"isError\":true", await removedHistory.Content.ReadAsStringAsync());
         Assert.Equal(HttpStatusCode.Unauthorized, (await user.PostAsJsonAsync("/mcp", new { })).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await mcp.GetAsync("/api/boards")).StatusCode);
         await user.DeleteAsync("/api/auth/tokens/" + AuthEndpoints.HashToken(token));

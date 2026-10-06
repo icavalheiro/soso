@@ -131,6 +131,14 @@ public sealed class BoardService(Store store)
         return ticket!;
     }
 
+    public TicketActivity[] GetTicketHistory(string boardId, string ticketId, ClaimsPrincipal user)
+    {
+        lock (store.Gate)
+        {
+            return RequireTicket(boardId, ticketId, user).Activity.ToArray();
+        }
+    }
+
     public Ticket CreateTicket(string boardId, CreateTicketRequest request, ClaimsPrincipal user)
     {
         lock (store.Gate)
