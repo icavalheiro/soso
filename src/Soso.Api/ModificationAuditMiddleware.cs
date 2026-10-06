@@ -28,6 +28,17 @@ public sealed class ModificationAuditMiddleware(RequestDelegate next, ILogger<Mo
 
         if (context.Response.StatusCode is >= 200 and < 400)
         {
+            if (!context.Request.Path.StartsWithSegments("/api/admin/backup"))
+            {
+                try
+                {
+                    context.RequestServices.GetService<Store>()?.MarkModified();
+                }
+                catch (ArgumentNullException)
+                {
+                    // Middleware unit tests can invoke this without a configured service provider.
+                }
+            }
             var actorId = context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "anonymous";
             logger.LogInformation(
                 ModificationRecorded,

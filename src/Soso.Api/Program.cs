@@ -40,6 +40,9 @@ Directory.CreateDirectory(dataPath);
 builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(dataPath, "keys")));
 builder.Services.AddSingleton<Store>();
 builder.Services.AddSingleton<BoardService>();
+builder.Services.AddHttpClient();
+builder.Services.AddSingleton<DropboxBackupService>();
+builder.Services.AddHostedService(provider => provider.GetRequiredService<DropboxBackupService>());
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMcpServer(options =>
 {
@@ -173,6 +176,7 @@ app.Use(async (context, next) =>
 app.UseMiddleware<ModificationAuditMiddleware>();
 app.MapAccounts();
 app.MapBoards();
+app.MapBackup();
 app.MapMcp("/mcp").RequireAuthorization("Mcp");
 app.MapGet("/api/health", () => TypedResults.Ok(new { status = "ok" })).AllowAnonymous();
 app.MapFallback(async context =>

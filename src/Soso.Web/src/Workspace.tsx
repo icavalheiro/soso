@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState, useDeferredValue } from 'react';
 import { ActionIcon, Avatar, Badge, Button, Group, Loader, Modal, PasswordInput, Popover, Select, Stack, Text, TextInput, Tooltip, useComputedColorScheme, useMantineColorScheme } from '@mantine/core';
-import { Archive, Columns3, Languages, Plus, Search, Settings, LogOut, Sun, Moon, PanelLeftClose, PanelLeftOpen, RefreshCw, Users, SlidersHorizontal } from 'lucide-react';
+import { Archive, Columns3, Languages, Plus, Search, Settings, LogOut, Sun, Moon, PanelLeftClose, PanelLeftOpen, RefreshCw, Users, SlidersHorizontal, DatabaseBackup } from 'lucide-react';
 import { api, ApiError, refreshCsrf, imageUrl, ticketBody, tags } from './api';
 import type { Account, Board, BoardData, Ticket } from './api';
 import { reportError } from './feedback';
@@ -11,6 +11,7 @@ const TicketModal = lazy( () => import( './TicketModal' ).then( module => ( { de
 const BoardModal = lazy( () => import( './BoardModal' ).then( module => ( { default: module.BoardModal } ) ) );
 const ProfileModal = lazy( () => import( './SettingsModals' ).then( module => ( { default: module.ProfileModal } ) ) );
 const AdminModal = lazy( () => import( './AdminModal' ).then( module => ( { default: module.AdminModal } ) ) );
+const BackupModal = lazy( () => import( './BackupModal' ).then( module => ( { default: module.BackupModal } ) ) );
 const ArchiveModal = lazy( () => import( './ArchiveModal' ).then( module => ( { default: module.ArchiveModal } ) ) );
 
 function IconButton ( { label, children, onClick, expanded, controls }: { label: string; children: React.ReactNode; onClick: () => void; expanded?: boolean; controls?: string; } )
@@ -59,6 +60,7 @@ export default function Workspace ()
     const [ boardModal, setBoardModal ] = useState<'create' | 'edit' | null>( null );
     const [ profile, setProfile ] = useState( false );
     const [ admin, setAdmin ] = useState( false );
+    const [ backup, setBackup ] = useState( false );
     const [ newColumn, setNewColumn ] = useState<string | null>( null );
     const [ title, setTitle ] = useState( '' );
     const [ busy, setBusy ] = useState( false );
@@ -84,7 +86,7 @@ export default function Workspace ()
                 reportError( error );
             }
         } ).finally( () => { if ( alive ) { setBooting( false ); } } );
-        const expire = () => { setAccount( null ); setData( null ); setBoards( [] ); setSelected( null ); setProfile( false ); setAdmin( false ); setBoardModal( null ); };
+        const expire = () => { setAccount( null ); setData( null ); setBoards( [] ); setSelected( null ); setProfile( false ); setAdmin( false ); setBackup( false ); setBoardModal( null ); };
         window.addEventListener( 'soso-session-expired', expire );
         return () => { alive = false; window.removeEventListener( 'soso-session-expired', expire ); };
     }, [] );
@@ -255,6 +257,7 @@ export default function Workspace ()
             <nav className="board-nav">{ boards.map( board => <button key={ board.id } className={ `board-link ${ board.id === activeId ? 'active' : '' }` } aria-current={ board.id === activeId ? 'page' : undefined } onClick={ () => { selectBoard( board.id ); } }><BoardIcon icon={ board.icon } color={ board.color } /><span>{ board.name }</span></button> ) }</nav>
             <div className="sidebar-bottom">
                 { account.isAdmin && <button className="board-link" aria-label={ t( 'Accounts' ) } onClick={ () => { setAdmin( true ); } }><Users size={ 18 } /><span>{ t( 'Accounts' ) }</span></button> }
+                { account.isAdmin && <button className="board-link" aria-label={ t( 'Backup' ) } onClick={ () => { setBackup( true ); } }><DatabaseBackup size={ 18 } /><span>{ t( 'Backup' ) }</span></button> }
                 <button className="board-link" aria-label={ t( 'Profile & settings' ) } onClick={ () => { setProfile( true ); } }><Settings size={ 18 } /><span>{ t( 'Profile & settings' ) }</span></button>
                 <button className="account-button" aria-label={ t( 'Open profile' ) } onClick={ () => { setProfile( true ); } }><Avatar src={ imageUrl( account.avatarId ) } size={ 32 } radius="xl">{ account.name.slice( 0, 2 ).toUpperCase() }</Avatar><span><strong>{ account.name }</strong><small>{ t( account.isAdmin ? 'Administrator' : 'Member' ) }</small></span></button>
             </div>
@@ -294,6 +297,7 @@ export default function Workspace ()
             { boardModal && <BoardModal board={ boardModal === 'edit' ? data?.board : undefined } onClose={ () => { setBoardModal( null ); } } onSave={ board => { setBoards( previous => [ ...previous.filter( item => item.id !== board.id ), board ] ); selectBoard( board.id ); setBoardModal( null ); void api<BoardData>( `/boards/${ board.id }` ).then( setData ).catch( reportError ); } } onDelete={ id => { const remaining = boards.filter( board => board.id !== id ); setBoards( remaining ); selectBoard( remaining[ 0 ]?.id ?? '' ); setData( null ); setBoardModal( null ); } } /> }
             { profile && <ProfileModal account={ account } onChange={ setAccount } onClose={ () => { setProfile( false ); } } /> }
             { admin && <AdminModal onClose={ () => { setAdmin( false ); } } /> }
+            { backup && <BackupModal onClose={ () => { setBackup( false ); } } /> }
             { archive && data && <ArchiveModal data={ data } onClose={ () => { setArchive( false ); } } onOpen={ setSelected } onChange={ changed } /> }
         </Suspense>
         <Modal opened={ newColumn !== null } onClose={ () => { setNewColumn( null ); } } title={ t( 'New ticket' ) } centered><form onSubmit={ event => { event.preventDefault(); void createTicket(); } }><Stack><TextInput label={ t( 'Title' ) } placeholder={ t( 'What needs to happen?' ) } required maxLength={ 160 } value={ title } autoFocus onChange={ event => { setTitle( event.currentTarget.value ); } } /><Select label={ t( 'Column' ) } value={ newColumn } onChange={ setNewColumn } data={ data?.board.columns.map( column => ( { value: column.id, label: column.name } ) ) ?? [] } allowDeselect={ false } /><Button type="submit" loading={ busy } disabled={ !title.trim() }>{ t( 'Create ticket' ) }</Button></Stack></form></Modal>

@@ -89,6 +89,21 @@ public sealed class AccessToken
     public DateTime ExpiresAt { get; set; }
 }
 
+public sealed class DropboxBackupConfiguration
+{
+    public string Id { get; set; } = "dropbox";
+    public string ProtectedCredentials { get; set; } = "";
+}
+
+public sealed class BackupState
+{
+    public string Id { get; set; } = "main";
+    public DateTime LastModifiedAt { get; set; }
+    public DateTime? LastBackupAt { get; set; }
+    public DateTime? LastBackedUpModificationAt { get; set; }
+    public string? LastError { get; set; }
+}
+
 public sealed class TicketActivity
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
