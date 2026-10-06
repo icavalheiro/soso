@@ -730,6 +730,8 @@ for ( const viewport of [ { name: 'desktop', width: 1366, height: 900 }, { name:
         await expect( page.locator( 'html' ) ).toHaveAttribute( 'data-mantine-color-scheme', 'dark' );
         await page.screenshot( { path: testInfo.outputPath( `${ viewport.name }-dark.png` ) } );
         await page.getByRole( 'button', { name: 'Open ticket: Sketch the board layout', exact: true } ).click();
+        await expect( page.getByText( 'Sketch the board layout', { exact: true } ) ).toBeVisible();
+        await page.getByRole( 'button', { name: 'Edit title', exact: true } ).click();
         await expect( page.getByLabel( 'Ticket title', { exact: true } ) ).toBeVisible();
         await page.screenshot( { path: testInfo.outputPath( `${ viewport.name }-ticket.png` ) } );
         expect( failures ).toEqual( [] );

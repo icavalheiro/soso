@@ -24,6 +24,7 @@ export function TicketModal ( { ticket, data, account, onClose, onChange, onDele
     const [ busy, setBusy ] = useState( false );
     const [ confirm, setConfirm ] = useState<'delete' | 'discard' | null>( null );
     const [ preview, setPreview ] = useState<string | null>( null );
+    const [ editingTitle, setEditingTitle ] = useState( false );
     const [ editingDescription, setEditingDescription ] = useState( false );
     const subtaskSensors = useSensors( useSensor( PointerSensor, { activationConstraint: { distance: 6 } } ), useSensor( KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates } ) );
     const path = `/boards/${ ticket.boardId }/tickets/${ ticket.id }`;
@@ -203,7 +204,16 @@ export function TicketModal ( { ticket, data, account, onClose, onChange, onDele
     return <Modal opened onClose={ close } title={ <span className="modal-ticket-label">{ t( 'Ticket' ).toUpperCase() } #{ ticket.id.slice( 0, 5 ).toUpperCase() }</span> } size={ 880 } centered closeOnClickOutside={ false } closeOnEscape={ !busy } withCloseButton={ !busy }>
         <form onSubmit={ event => { event.preventDefault(); void action( async () => { await saveDraft(); onClose(); } ); } }>
             <fieldset className="ticket-fieldset" disabled={ busy }>
-                <TextInput aria-label="Ticket title" className="ticket-title-input" required maxLength={ 160 } value={ draft.title } onChange={ event => { setDraft( { ...draft, title: event.currentTarget.value } ); } } />
+                <Group className="ticket-title-row" justify="space-between" gap="xs" wrap="nowrap">
+                    { editingTitle ?
+                        <TextInput aria-label={ t( 'Ticket title' ) } className="ticket-title-input" style={ { flex: 1 } } required maxLength={ 160 } autoFocus value={ draft.title } onChange={ event => { setDraft( { ...draft, title: event.currentTarget.value } ); } } /> :
+                        <Text className="ticket-title-text" size="xl" fw={ 600 }>{ draft.title }</Text> }
+                    <Tooltip label={ t( editingTitle ? 'Preview title' : 'Edit title' ) }>
+                        <ActionIcon type="button" variant="subtle" aria-label={ t( editingTitle ? 'Preview title' : 'Edit title' ) } disabled={ busy } onClick={ () => { setEditingTitle( !editingTitle ); } }>
+                            { editingTitle ? <Eye size={ 16 } /> : <Pencil size={ 16 } /> }
+                        </ActionIcon>
+                    </Tooltip>
+                </Group>
                 <div className="ticket-editor-grid"><div className="ticket-editor-main"><Stack gap="lg">
                     <MultiSelect label={ t( 'Tags' ) } value={ draft.tags } onChange={ tags => { setDraft( { ...draft, tags } ); } } data={ tags.map( tag => ( { value: tag.value, label: tag.label } ) ) } searchable />
                     <section aria-label={ t( 'Description' ) }>
