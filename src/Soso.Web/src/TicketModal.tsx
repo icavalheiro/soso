@@ -13,7 +13,7 @@ import type { Account, BoardData, Subtask, Ticket } from './api';
 import { reportError } from './feedback';
 import { useLanguage } from './useLanguage';
 
-export function TicketModal ( { ticket, data, account, onClose, onChange, onDelete }: { ticket: Ticket; data: BoardData; account: Account; onClose: () => void; onChange: ( ticket: Ticket ) => void; onDelete: ( id: string ) => void; } )
+export function TicketModal ( { ticket, data, account, onClose, onFocusSearch, onChange, onDelete }: { ticket: Ticket; data: BoardData; account: Account; onClose: () => void; onFocusSearch: () => void; onChange: ( ticket: Ticket ) => void; onDelete: ( id: string ) => void; } )
 {
     const { t } = useLanguage();
     const [ draft, setDraft ] = useState<Ticket>( () => ( { ...structuredClone( ticket ), description: ticket.description ?? '' } ) );
@@ -29,6 +29,8 @@ export function TicketModal ( { ticket, data, account, onClose, onChange, onDele
     const [ preview, setPreview ] = useState<string | null>( null );
     const [ editingTitle, setEditingTitle ] = useState( false );
     const [ editingDescription, setEditingDescription ] = useState( false );
+    const [ focusSearchOutsideModal, setFocusSearchOutsideModal ] = useState( false );
+    const form = useRef<HTMLFormElement>( null );
     const subtaskSensors = useSensors( useSensor( PointerSensor, { activationConstraint: { distance: 6 } } ), useSensor( KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates } ) );
     const path = `/boards/${ ticket.boardId }/tickets/${ ticket.id }`;
     const done = draft.subtasks.filter( task => task.done ).length;
@@ -152,6 +154,38 @@ export function TicketModal ( { ticket, data, account, onClose, onChange, onDele
         };
     }, [ draft, baseline ] );
 
+    useEffect( () =>
+    {
+        function handleShortcut ( event: KeyboardEvent )
+        {
+            if ( !( event.ctrlKey || event.metaKey ) )
+            {
+                return;
+            }
+            const key = event.key.toLowerCase();
+            if ( key === 's' )
+            {
+                event.preventDefault();
+                if ( confirm === null && preview === null && !busy )
+                {
+                    form.current?.requestSubmit();
+                }
+            }
+            else if ( key === 'f' )
+            {
+                event.preventDefault();
+                if ( confirm === null && preview === null )
+                {
+                    setFocusSearchOutsideModal( true );
+                    window.requestAnimationFrame( onFocusSearch );
+                }
+            }
+        }
+
+        window.addEventListener( 'keydown', handleShortcut );
+        return () => { window.removeEventListener( 'keydown', handleShortcut ); };
+    }, [ busy, confirm, onFocusSearch, preview ] );
+
     function close ()
     {
         const dirty = JSON.stringify( ticketBody( draft ) ) !== baseline;
@@ -248,8 +282,8 @@ export function TicketModal ( { ticket, data, account, onClose, onChange, onDele
         return <button type="button" className="ticket-inline-image" aria-label={ t( 'View attached image' ) } onClick={ () => { setPreview( id ); } }><img src={ imageUrl( id ) } alt={ alt || t( 'Ticket attachment' ) } onError={ event => { event.currentTarget.hidden = true; } } /></button>;
     }
 
-    return <Modal opened onClose={ close } title={ <span className="modal-ticket-label">{ t( 'Ticket' ).toUpperCase() } #{ ticket.id.slice( 0, 5 ).toUpperCase() }</span> } size={ 880 } centered closeOnClickOutside={ false } closeOnEscape={ !busy } withCloseButton={ !busy }>
-        <form onSubmit={ event => { event.preventDefault(); void action( async () => { await saveDraft(); onClose(); } ); } }>
+    return <Modal opened onClose={ close } title={ <span className="modal-ticket-label">{ t( 'Ticket' ).toUpperCase() } #{ ticket.id.slice( 0, 5 ).toUpperCase() }</span> } size={ 880 } centered closeOnClickOutside={ false } closeOnEscape={ !busy } withCloseButton={ !busy } trapFocus={ !focusSearchOutsideModal }>
+        <form ref={ form } onSubmit={ event => { event.preventDefault(); void action( async () => { await saveDraft(); onClose(); } ); } }>
             <fieldset className="ticket-fieldset" disabled={ busy }>
                 <Group className="ticket-title-row" justify="space-between" gap="xs" wrap="nowrap">
                     { editingTitle ?

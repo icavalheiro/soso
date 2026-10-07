@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState, useDeferredValue } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, useDeferredValue } from 'react';
 import { ActionIcon, Avatar, Badge, Button, Group, Loader, Modal, PasswordInput, Popover, Select, Stack, Text, TextInput, Tooltip, useComputedColorScheme, useMantineColorScheme } from '@mantine/core';
 import { Archive, Columns3, Languages, Plus, Search, Settings, LogOut, Sun, Moon, PanelLeftClose, PanelLeftOpen, RefreshCw, Users, SlidersHorizontal, DatabaseBackup } from 'lucide-react';
 import { api, ApiError, refreshCsrf, imageUrl, ticketBody, tags } from './api';
@@ -50,6 +50,7 @@ export default function Workspace ()
         return stored === null ? window.innerWidth < 768 : stored === 'true';
     } );
     const [ search, setSearch ] = useState( '' );
+    const searchInput = useRef<HTMLInputElement>( null );
     const query = useDeferredValue( search );
     const [ priority, setPriority ] = useState( 'all' );
     const [ tagFilter, setTagFilter ] = useState<string[]>( [] );
@@ -117,6 +118,24 @@ export default function Workspace ()
             setColorScheme( accountTheme );
         }
     }, [ accountTheme, setColorScheme ] );
+
+    useEffect( () =>
+    {
+        function handleShortcut ( event: KeyboardEvent )
+        {
+            if ( ( event.ctrlKey || event.metaKey ) && event.key.toLowerCase() === 'f' )
+            {
+                event.preventDefault();
+                if ( !selected )
+                {
+                    searchInput.current?.focus();
+                }
+            }
+        }
+
+        window.addEventListener( 'keydown', handleShortcut );
+        return () => { window.removeEventListener( 'keydown', handleShortcut ); };
+    }, [ selected ] );
 
     useEffect( () =>
     {
@@ -266,7 +285,7 @@ export default function Workspace ()
             <header className="topbar">
                 <Group gap={ 6 } wrap="nowrap" className="topbar-title"><IconButton label={ t( collapsed ? 'Expand sidebar' : 'Collapse sidebar' ) } onClick={ toggleSidebar } expanded={ !collapsed } controls="workspace-sidebar">{ collapsed ? <PanelLeftOpen size={ 16 } /> : <PanelLeftClose size={ 16 } /> }</IconButton><span className="workspace-label">Sosô</span><span className="separator">/</span>{ data && <BoardIcon icon={ data.board.icon } color={ data.board.color } size={ 14 } /> }<Text className="topbar-board-name" size="xs" fw={ 600 } truncate>{ data?.board.name ?? t( 'Boards' ) }</Text>{ data && <Badge className="board-ticket-count" variant="light" color="gray" size="sm">{ filtered.length } { t( filtered.length === 1 ? 'ticket' : 'tickets' ) }</Badge> }</Group>
                 <Group gap={ 4 } wrap="nowrap" className="topbar-actions">
-                    { data && <TextInput className="topbar-search" aria-label={ t( 'Search tickets' ) } placeholder={ t( 'Search cards...' ) } leftSection={ <Search size={ 14 } /> } size="xs" value={ search } onChange={ event => { setSearch( event.currentTarget.value ); } } /> }
+                    { data && <TextInput ref={ searchInput } className="topbar-search" aria-label={ t( 'Search tickets' ) } placeholder={ t( 'Search cards...' ) } leftSection={ <Search size={ 14 } /> } size="xs" value={ search } onChange={ event => { setSearch( event.currentTarget.value ); } } /> }
                     { themeButton }
                     <IconButton label={ t( 'Sign out' ) } onClick={ () => { void api( '/auth/logout', 'POST' ).then( () => { setAccount( null ); setData( null ); setBoards( [] ); } ).catch( reportError ); } }><LogOut size={ 15 } /></IconButton>
                 </Group>
@@ -293,7 +312,7 @@ export default function Workspace ()
             </Stack>
         </Modal>
         <Suspense fallback={ <Loader className="modal-loading" /> }>
-            { selected && data && <TicketModal key={ selected.id } ticket={ selected } data={ data } account={ account } onClose={ () => { setSelected( null ); } } onChange={ changed } onDelete={ id => { setData( previous => previous ? { ...previous, tickets: previous.tickets.filter( ticket => ticket.id !== id ) } : previous ); setSelected( null ); } } /> }
+            { selected && data && <TicketModal key={ selected.id } ticket={ selected } data={ data } account={ account } onClose={ () => { setSelected( null ); } } onFocusSearch={ () => { searchInput.current?.focus(); } } onChange={ changed } onDelete={ id => { setData( previous => previous ? { ...previous, tickets: previous.tickets.filter( ticket => ticket.id !== id ) } : previous ); setSelected( null ); } } /> }
             { boardModal && <BoardModal board={ boardModal === 'edit' ? data?.board : undefined } onClose={ () => { setBoardModal( null ); } } onSave={ board => { setBoards( previous => [ ...previous.filter( item => item.id !== board.id ), board ] ); selectBoard( board.id ); setBoardModal( null ); void api<BoardData>( `/boards/${ board.id }` ).then( setData ).catch( reportError ); } } onDelete={ id => { const remaining = boards.filter( board => board.id !== id ); setBoards( remaining ); selectBoard( remaining[ 0 ]?.id ?? '' ); setData( null ); setBoardModal( null ); } } /> }
             { profile && <ProfileModal account={ account } onChange={ setAccount } onClose={ () => { setProfile( false ); } } /> }
             { admin && <AdminModal onClose={ () => { setAdmin( false ); } } /> }

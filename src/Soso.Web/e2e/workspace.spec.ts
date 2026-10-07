@@ -617,6 +617,25 @@ test( 'ticket edits are automatically saved after ten seconds of inactivity', as
     await expect.poll( () => state.data.tickets[ 0 ].title ).toBe( 'Automatically saved title' );
 } );
 
+test( 'ticket keyboard shortcuts save and close the editor and focus search', async ( { page } ) =>
+{
+    const state = await installApiMock( page );
+    await page.goto( '/' );
+    await page.getByRole( 'button', { name: 'Open ticket: Sketch the board layout', exact: true } ).click();
+
+    const title = page.getByRole( 'button', { name: 'Edit title', exact: true } );
+    await title.click();
+    await page.getByRole( 'textbox', { name: 'Ticket title' } ).fill( 'Saved with keyboard shortcut' );
+    await page.keyboard.press( 'Control+s' );
+
+    await expect( page.getByRole( 'dialog' ) ).toHaveCount( 0 );
+    expect( state.data.tickets[ 0 ].title ).toBe( 'Saved with keyboard shortcut' );
+
+    await page.getByRole( 'button', { name: 'Open ticket: Saved with keyboard shortcut', exact: true } ).click();
+    await page.keyboard.press( 'Control+f' );
+    await expect( page.getByRole( 'textbox', { name: 'Search tickets' } ) ).toBeFocused();
+} );
+
 test( 'ticket subtasks can be reordered and saved', async ( { page } ) =>
 {
     const state = await installApiMock( page );
