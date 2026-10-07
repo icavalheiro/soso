@@ -68,9 +68,13 @@ public sealed class DropboxBackupService(Store store, IHttpClientFactory clients
                 }
                 return;
             }
-            var credentials = Unprotect(configuration.ProtectedCredentials);
             var state = store.GetBackupState();
             var now = DateTime.UtcNow;
+            if (!force && state.NextBackupAttemptAt > now)
+            {
+                return;
+            }
+            var credentials = Unprotect(configuration.ProtectedCredentials);
             var changedSinceBackup = state.LastBackedUpModificationAt is null || state.LastModifiedAt > state.LastBackedUpModificationAt;
             var quietForTenMinutes = changedSinceBackup && now - state.LastModifiedAt >= TimeSpan.FromMinutes(10);
             var lastSaveAt = state.LastBackupAt ?? state.LastBackedUpModificationAt ?? state.LastModifiedAt;
@@ -81,7 +85,7 @@ public sealed class DropboxBackupService(Store store, IHttpClientFactory clients
             }
 
             snapshotPath = store.CreateBackupSnapshot(out var backedUpModificationAt);
-            await UploadAsync(credentials, snapshotPath, cancellationToken);
+            await UploadWithRetryAsync(credentials, snapshotPath, cancellationToken);
             store.RecordBackup(backedUpModificationAt);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -90,14 +94,23 @@ public sealed class DropboxBackupService(Store store, IHttpClientFactory clients
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "Dropbox backup failed.");
             var message = exception switch
             {
                 ApiException => exception.Message,
+                HttpRequestException { StatusCode: not null } => exception.Message,
                 HttpRequestException => "The connection to Dropbox's upload server was interrupted. Check that the server/container can make outbound HTTPS connections to content.dropboxapi.com on port 443, then try again.",
+                OperationCanceledException => "The Dropbox upload timed out. Check the server's outbound connection and try again.",
                 IOException => "Could not read or create the database backup file. Check the server's data directory and available disk space.",
                 _ => "Dropbox backup failed. Check the server logs for details."
             };
+            if (exception is ApiException or HttpRequestException or OperationCanceledException)
+            {
+                logger.LogWarning("Dropbox backup failed: {Reason} Automatic retry in 15 minutes.", message);
+            }
+            else
+            {
+                logger.LogError(exception, "Dropbox backup failed.");
+            }
             store.RecordBackupError(message);
             if (force)
             {
@@ -111,6 +124,26 @@ public sealed class DropboxBackupService(Store store, IHttpClientFactory clients
                 try { File.Delete(snapshotPath); } catch (IOException) { }
             }
             backupGate.Release();
+        }
+    }
+
+    private async Task UploadWithRetryAsync(DropboxCredentials credentials, string path, CancellationToken cancellationToken)
+    {
+        // A lost response can mean a chunk was accepted. Restart with a fresh session
+        // instead of blindly replaying an append at a potentially obsolete offset.
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await UploadAsync(credentials, path, cancellationToken);
+                return;
+            }
+            catch (Exception exception) when (attempt < 3 && !cancellationToken.IsCancellationRequested
+                && exception is HttpRequestException or OperationCanceledException)
+            {
+                logger.LogWarning("Dropbox upload interrupted on attempt {Attempt}; restarting with a fresh upload session.", attempt);
+                await Task.Delay(TimeSpan.FromSeconds(attempt), cancellationToken);
+            }
         }
     }
 
@@ -173,6 +206,7 @@ public sealed class DropboxBackupService(Store store, IHttpClientFactory clients
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, $"https://content.dropboxapi.com/2/files/{endpoint}");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", credentials.AccessToken);
+        request.Headers.ExpectContinue = true;
         request.Headers.TryAddWithoutValidation("Dropbox-API-Arg", JsonSerializer.Serialize(arguments, DropboxApiJsonOptions));
         request.Content = new ByteArrayContent(content);
         request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
@@ -197,6 +231,10 @@ public sealed class DropboxBackupService(Store store, IHttpClientFactory clients
                 _ => $"Dropbox could not store the backup (HTTP {(int)response.StatusCode} while {phase}). Check the app permissions and available Dropbox space.{(requestId is null ? "" : $" Dropbox request ID: {requestId}.")}"
             };
             response.Dispose();
+            if ((int)response.StatusCode == 429 || (int)response.StatusCode >= 500 && (int)response.StatusCode != 507)
+            {
+                throw new HttpRequestException(message, null, response.StatusCode);
+            }
             throw new ApiException(502, message);
         }
         return response;

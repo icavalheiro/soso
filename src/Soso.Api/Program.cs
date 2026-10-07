@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
+using ModelContextProtocol.Protocol;
 using Soso.Api;
 
 if (args.Contains("--healthcheck"))
@@ -49,7 +50,24 @@ builder.Services.AddMcpServer(options =>
     options.ServerInfo = new() { Name = "Sosô", Version = "1.0.0" };
     options.ServerInstructions = McpTools.WorkflowInstructions;
 })
-    .WithHttpTransport(options => options.Stateless = true).WithTools<McpTools>();
+    .WithHttpTransport(options => options.Stateless = true).WithTools<McpTools>()
+    .WithRequestFilters(filters => filters.AddCallToolFilter(next => async (request, cancellationToken) =>
+    {
+        try
+        {
+            return await next(request, cancellationToken);
+        }
+        catch (ApiException exception)
+        {
+            var guidance = exception.Status switch
+            {
+                404 => " Read get_board and copy the exact board.id and ticket.id from its response; do not use a title, shortened ID or an ID from another board. search_tickets can locate a ticket using a partial ID.",
+                409 => " Read get_board again and retry with the current ticket revision.",
+                _ => ""
+            };
+            return new CallToolResult { IsError = true, Content = [new TextContentBlock { Text = exception.Message + guidance }] };
+        }
+    }));
 builder.Services.Configure<ForwardedHeadersOptions>(options => TunnelProxy.Configure(options, builder.Configuration));
 builder.Services.AddSingleton<IPasswordHasher<Account>, PasswordHasher<Account>>();
 builder.Services.AddProblemDetails();

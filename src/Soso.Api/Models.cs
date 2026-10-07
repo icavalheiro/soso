@@ -105,6 +105,7 @@ public sealed class BackupState
     public DateTime? LastBackupAt { get; set; }
     public DateTime? LastBackedUpModificationAt { get; set; }
     public string? LastError { get; set; }
+    public DateTime? NextBackupAttemptAt { get; set; }
 }
 
 public sealed class TicketActivity

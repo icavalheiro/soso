@@ -46,7 +46,8 @@ public static class AuthEndpoints
         var group = app.MapGroup("/api/auth");
         group.MapGet("/csrf", (HttpContext context, IAntiforgery antiforgery) =>
         {
-            context.Response.Headers.CacheControl = "no-store";
+            context.Response.Headers.CacheControl = "no-cache, no-store";
+            context.Response.Headers.Pragma = "no-cache";
             return TypedResults.Ok(new { token = antiforgery.GetAndStoreTokens(context).RequestToken });
         }).AllowAnonymous();
         group.MapPost("/login", async (LoginRequest request, HttpContext context, Store store, IPasswordHasher<Account> hasher) =>

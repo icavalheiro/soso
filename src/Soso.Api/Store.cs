@@ -96,6 +96,7 @@ public sealed class Store : IDisposable
                 state.LastBackedUpModificationAt = state.LastModifiedAt;
             }
             state.LastError = null;
+            state.NextBackupAttemptAt = null;
             BackupStates.Upsert(state);
         }
     }
@@ -107,6 +108,7 @@ public sealed class Store : IDisposable
             DropboxConfigurations.Delete("dropbox");
             var state = BackupStates.FindById("main") ?? new BackupState();
             state.LastError = null;
+            state.NextBackupAttemptAt = null;
             BackupStates.Upsert(state);
         }
     }
@@ -131,6 +133,7 @@ public sealed class Store : IDisposable
             state.LastBackupAt = DateTime.UtcNow;
             state.LastBackedUpModificationAt = backedUpModificationAt;
             state.LastError = null;
+            state.NextBackupAttemptAt = null;
             BackupStates.Upsert(state);
         }
     }
@@ -141,6 +144,7 @@ public sealed class Store : IDisposable
         {
             var state = BackupStates.FindById("main") ?? new BackupState();
             state.LastError = message;
+            state.NextBackupAttemptAt = DateTime.UtcNow.AddMinutes(15);
             BackupStates.Upsert(state);
         }
     }
