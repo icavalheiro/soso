@@ -15,7 +15,7 @@ export function fixture (): { account: Account; data: BoardData; }
         { title: 'Set up repository', description: 'Repository, README and basic tooling are in place.', columnId: 'done', tags: [ 'feature', 'docs' ], assigneeId: 'sam-fixture' },
         { title: 'Update dependency audit', description: 'Review the dependency report before the release.', columnId: 'done', tags: [ 'chore' ], assigneeId: account.id, archived: true },
     ];
-    data.tickets = entries.map( ( entry, index ) => ( { id: `ticket-${ index }`, boardId: data.board.id, priority: index === 2 ? 'urgent' : 'normal', archived: false, dueDate: null, position: ( index + 1 ) * 1024, revision: 0, subtasks: [], comments: [], activity: [], images: [], ...entry } ) );
+    data.tickets = entries.map( ( entry, index ) => ( { id: `ticket-${ index }`, boardId: data.board.id, priority: index === 2 ? 'urgent' : 'normal', archived: false, dueDate: null, position: ( index + 1 ) * 1024, revision: 0, subtasks: [], comments: [], activity: [], images: [], videos: [], ...entry } ) );
     return { account, data };
 }
 
@@ -146,9 +146,17 @@ export async function installApiMock ( page: Page, authenticated = true )
         if ( path === `/api/boards/${ state.data.board.id }/tickets` && method === 'POST' )
         {
             const input = request.postDataJSON();
-            const ticket = { id: `ticket-${ sequence++ }`, boardId: state.data.board.id, description: '', priority: 'normal', tags: [], archived: false, assigneeId: null, dueDate: null, position: ( state.data.tickets.length + 1 ) * 1024, revision: 0, subtasks: [], comments: [], activity: [ { id: `activity-${ sequence++ }`, actorId: state.account.id, actorName: state.account.name, action: 'created', field: null, oldValue: null, newValue: null, createdAt: new Date().toISOString() } ], images: [], ...input };
+            const ticket = { id: `ticket-${ sequence++ }`, boardId: state.data.board.id, description: '', priority: 'normal', tags: [], archived: false, assigneeId: null, dueDate: null, position: ( state.data.tickets.length + 1 ) * 1024, revision: 0, subtasks: [], comments: [], activity: [ { id: `activity-${ sequence++ }`, actorId: state.account.id, actorName: state.account.name, action: 'created', field: null, oldValue: null, newValue: null, createdAt: new Date().toISOString() } ], images: [], videos: [], ...input };
             state.data.tickets.push( ticket );
             return reply( ticket, 201 );
+        }
+        if ( path.startsWith( '/api/videos/' ) && path.endsWith( '/thumbnail' ) )
+        {
+            return route.fulfill( { path: 'public/logo.jpg', contentType: 'image/jpeg' } );
+        }
+        if ( path.startsWith( '/api/videos/' ) )
+        {
+            return route.fulfill( { status: 200, contentType: 'video/mp4', body: Buffer.from( [ 0, 0, 0, 24, 102, 116, 121, 112, 105, 115, 111, 109 ] ) } );
         }
         if ( path.startsWith( '/api/images/' ) )
         {
@@ -171,6 +179,13 @@ export async function installApiMock ( page: Page, authenticated = true )
         if ( ticket && path.endsWith( '/images' ) )
         {
             ticket.images.push( `image-${ sequence++ }` );
+            ticket.revision++;
+            return reply( ticket );
+        }
+        if ( ticket && path.endsWith( '/videos' ) )
+        {
+            ticket.videos ??= [];
+            ticket.videos.push( `video-${ sequence++ }` );
             ticket.revision++;
             return reply( ticket );
         }

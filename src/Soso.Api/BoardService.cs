@@ -357,17 +357,24 @@ public sealed class BoardService(Store store)
         }
     }
 
-    public Ticket AddImage(string boardId, string ticketId, ImageAsset image, ClaimsPrincipal user)
+    public Ticket AddImage(string boardId, string ticketId, ImageAsset image, ClaimsPrincipal user, bool isVideo = false)
     {
         lock (store.Gate)
         {
             var ticket = RequireTicket(boardId, ticketId, user);
-            if (ticket.Images.Count >= 6)
+            if (ticket.Images.Count + ticket.Videos.Count >= 6)
             {
-                throw new ApiException(400, "A ticket supports up to six images.");
+                throw new ApiException(400, "A ticket supports up to six attachments.");
             }
             store.Images.Insert(image);
-            ticket.Images.Add(image.Id);
+            if (isVideo)
+            {
+                ticket.Videos.Add(image.Id);
+            }
+            else
+            {
+                ticket.Images.Add(image.Id);
+            }
             Track(ticket, user, "image_added", "image", null, image.Id);
             ticket.Revision++;
             store.Tickets.Update(ticket);
@@ -380,7 +387,7 @@ public sealed class BoardService(Store store)
         lock (store.Gate)
         {
             var ticket = RequireTicket(boardId, ticketId, user);
-            if (!ticket.Images.Remove(imageId))
+            if (!ticket.Images.Remove(imageId) && !ticket.Videos.Remove(imageId))
             {
                 throw new ApiException(404, "Image not found.");
             }

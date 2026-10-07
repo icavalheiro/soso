@@ -55,6 +55,7 @@ public sealed class Ticket
     public List<TicketComment> Comments { get; set; } = [];
     public List<TicketActivity> Activity { get; set; } = [];
     public List<string> Images { get; set; } = [];
+    public List<string> Videos { get; set; } = [];
 }
 
 public sealed class Subtask
@@ -78,6 +79,8 @@ public sealed class ImageAsset
     public string OwnerId { get; set; } = "";
     public string? BoardId { get; set; }
     public byte[] Content { get; set; } = [];
+    public string ContentType { get; set; } = "image/png";
+    public byte[] Thumbnail { get; set; } = [];
 }
 
 public sealed class AccessToken

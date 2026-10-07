@@ -828,6 +828,18 @@ button:focus-visible {
     height: 100%;
     object-fit: cover;
 }
+.video-thumbnail {
+    position: relative;
+    cursor: pointer;
+}
+.video-thumbnail > span {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: white;
+    background: rgb(0 0 0 / 24%);
+}
 .attachment-remove {
     position: absolute;
     top: 4px;
@@ -838,6 +850,12 @@ button:focus-visible {
     width: 100%;
     max-height: 75dvh;
     object-fit: contain;
+}
+.video-preview {
+    display: block;
+    width: 100%;
+    max-height: 75dvh;
+    background: #000;
 }
 .comment {
     display: flex;

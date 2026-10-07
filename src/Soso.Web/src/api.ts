@@ -5,7 +5,7 @@ export type Board = { id: string; name: string; description: string; icon: strin
 export type Subtask = { id: string; title: string; done: boolean; };
 export type Comment = { id: string; authorId: string; text: string; createdAt: string; };
 export type TicketActivity = { id: string; actorId: string; actorName: string; action: string; field: string | null; oldValue: string | null; newValue: string | null; createdAt: string; };
-export type Ticket = { id: string; boardId: string; columnId: string; title: string; description: string; priority: string; tags: string[]; archived: boolean; assigneeId: string | null; dueDate: string | null; position: number; revision: number; subtasks: Subtask[]; comments: Comment[]; activity: TicketActivity[]; images: string[]; };
+export type Ticket = { id: string; boardId: string; columnId: string; title: string; description: string; priority: string; tags: string[]; archived: boolean; assigneeId: string | null; dueDate: string | null; position: number; revision: number; subtasks: Subtask[]; comments: Comment[]; activity: TicketActivity[]; images: string[]; videos: string[]; };
 export type BoardData = { board: Board; tickets: Ticket[]; members: Person[]; };
 export type Token = { id: string; name: string; expiresAt: string; boardIds: string[]; };
 let csrfToken = '';
@@ -78,6 +78,16 @@ export function ticketBody ( ticket: Ticket )
 {
     const { title, description, columnId, priority, assigneeId, dueDate, position, subtasks, tags, archived, revision } = ticket;
     return { title, description: description ?? '', columnId, priority, assigneeId, dueDate, position, subtasks, tags, archived, revision };
+}
+
+export function videoUrl ( id: string | null | undefined )
+{
+    return id ? `/api/videos/${ id }` : undefined;
+}
+
+export function videoThumbnailUrl ( id: string | null | undefined )
+{
+    return id ? `/api/videos/${ id }/thumbnail` : undefined;
 }
 
 export const tags = [

@@ -115,7 +115,7 @@ builder.Services.AddRateLimiter(options =>
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ =>
             new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
-builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 6 * 1024 * 1024);
+builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 56 * 1024 * 1024);
 var app = builder.Build();
 AuthEndpoints.Bootstrap(app.Services.GetRequiredService<Store>(), app.Configuration, app.Services.GetRequiredService<IPasswordHasher<Account>>());
 app.UseForwardedHeaders();

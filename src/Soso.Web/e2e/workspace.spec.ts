@@ -592,11 +592,23 @@ test( 'ticket subtasks, comments and images', async ( { page } ) =>
     await expect( activity ).toContainText( 'added a comment' );
     await expect( activity ).toContainText( 'Maya Chen' );
     expect( failures ).toEqual( [] );
-    await page.locator( 'input[type=file]' ).setInputFiles( 'public/logo.jpg' );
+    await page.locator( 'input[type=file][accept^="image/"]' ).setInputFiles( 'public/logo.jpg' );
     await expect( page.getByAltText( 'Ticket attachment', { exact: true } ) ).toBeVisible();
     await page.getByRole( 'button', { name: 'Save changes' } ).click();
     await expect( page.getByRole( 'dialog' ) ).toHaveCount( 0 );
     await expect( page.locator( '.ticket' ).filter( { hasText: 'Sketch the board layout' } ) ).toContainText( '1/1' );
+} );
+
+test( 'video attachments show a thumbnail and open in a preview popup', async ( { page } ) =>
+{
+    const state = await installApiMock( page );
+    state.data.tickets[ 0 ].videos.push( 'video-fixture' );
+    await page.goto( '/' );
+    await page.getByRole( 'button', { name: 'Open ticket: Sketch the board layout', exact: true } ).click();
+    await expect( page.getByRole( 'button', { name: 'View attached video', exact: true } ) ).toBeVisible();
+    await page.getByRole( 'button', { name: 'View attached video', exact: true } ).click();
+    await expect( page.locator( 'video.video-preview' ) ).toBeVisible();
+    await expect( page.locator( 'video.video-preview' ) ).toHaveAttribute( 'src', '/api/videos/video-fixture' );
 } );
 
 test( 'ticket edits are automatically saved after ten seconds of inactivity', async ( { page } ) =>

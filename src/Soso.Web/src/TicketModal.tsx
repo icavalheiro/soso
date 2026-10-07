@@ -7,8 +7,8 @@ import type { DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { ActionIcon, Avatar, Button, Checkbox, FileButton, Group, Modal, MultiSelect, Progress, Select, Stack, Text, Textarea, TextInput, Tooltip } from '@mantine/core';
-import { Archive, ArchiveRestore, CheckSquare, ChevronDown, Eye, GripVertical, ImagePlus, MessageSquare, Pencil, Plus, Save, Send, Trash2 } from 'lucide-react';
-import { api, imageUrl, newId, ticketBody, tags } from './api';
+import { Archive, ArchiveRestore, CheckSquare, ChevronDown, Eye, GripVertical, ImagePlus, MessageSquare, Pencil, Play, Plus, Save, Send, Trash2, Video } from 'lucide-react';
+import { api, imageUrl, newId, ticketBody, tags, videoThumbnailUrl, videoUrl } from './api';
 import type { Account, BoardData, Subtask, Ticket } from './api';
 import { reportError } from './feedback';
 import { useLanguage } from './useLanguage';
@@ -27,6 +27,7 @@ export function TicketModal ( { ticket, data, account, onClose, onFocusSearch, o
     const [ busy, setBusy ] = useState( false );
     const [ confirm, setConfirm ] = useState<'delete' | 'discard' | null>( null );
     const [ preview, setPreview ] = useState<string | null>( null );
+    const [ videoPreview, setVideoPreview ] = useState<string | null>( null );
     const [ editingTitle, setEditingTitle ] = useState( false );
     const [ editingDescription, setEditingDescription ] = useState( false );
     const [ focusSearchOutsideModal, setFocusSearchOutsideModal ] = useState( false );
@@ -225,7 +226,7 @@ export function TicketModal ( { ticket, data, account, onClose, onFocusSearch, o
         const ids: string[] = [];
         for ( const file of files )
         {
-            if ( draft.images.length + ids.length >= 6 )
+            if ( draft.images.length + ( draft.videos?.length ?? 0 ) + ids.length >= 6 )
             {
                 break;
             }
@@ -233,6 +234,60 @@ export function TicketModal ( { ticket, data, account, onClose, onFocusSearch, o
             form.append( 'file', file );
             const result = await api<Ticket>( `${ path }/images`, 'POST', form );
             ids.push( result.images[ result.images.length - 1 ] );
+            apply( result );
+        }
+        return ids;
+    }
+
+    async function createVideoThumbnail ( file: File )
+    {
+        const source = URL.createObjectURL( file );
+        try
+        {
+            const video = document.createElement( 'video' );
+            video.preload = 'metadata';
+            video.muted = true;
+            video.src = source;
+            await new Promise<void>( ( resolve, reject ) =>
+            {
+                video.onloadeddata = () => { resolve(); };
+                video.onerror = () => { reject( new Error( 'Unable to read this video.' ) ); };
+            } );
+            video.currentTime = Math.min( 1, ( video.duration || 1 ) / 2 );
+            await new Promise<void>( ( resolve, reject ) =>
+            {
+                video.onseeked = () => { resolve(); };
+                video.onerror = () => { reject( new Error( 'Unable to create a video thumbnail.' ) ); };
+            } );
+            const canvas = document.createElement( 'canvas' );
+            const scale = Math.min( 1, 800 / Math.max( video.videoWidth, video.videoHeight ) );
+            canvas.width = Math.max( 1, Math.round( video.videoWidth * scale ) );
+            canvas.height = Math.max( 1, Math.round( video.videoHeight * scale ) );
+            canvas.getContext( '2d' )?.drawImage( video, 0, 0, canvas.width, canvas.height );
+            const blob = await new Promise<Blob>( ( resolve, reject ) => canvas.toBlob( value => value ? resolve( value ) : reject( new Error( 'Unable to create a video thumbnail.' ) ), 'image/png' ) );
+            return new File( [ blob ], 'thumbnail.png', { type: 'image/png' } );
+        }
+        finally
+        {
+            URL.revokeObjectURL( source );
+        }
+    }
+
+    async function uploadVideos ( files: File[] )
+    {
+        await saveDraft();
+        const ids: string[] = [];
+        for ( const file of files )
+        {
+            if ( draft.images.length + ( draft.videos?.length ?? 0 ) + ids.length >= 6 )
+            {
+                break;
+            }
+            const form = new FormData();
+            form.append( 'file', file );
+            form.append( 'thumbnail', await createVideoThumbnail( file ) );
+            const result = await api<Ticket>( `${ path }/videos`, 'POST', form );
+            ids.push( result.videos[ result.videos.length - 1 ] );
             apply( result );
         }
         return ids;
@@ -313,7 +368,7 @@ export function TicketModal ( { ticket, data, account, onClose, onFocusSearch, o
                             </div> }
                     </section>
                     <section><Group justify="space-between" mb="sm"><Text size="sm" fw={ 600 }><CheckSquare size={ 15 } className="inline-icon" /> { t( 'Subtasks' ) }</Text><Text c="dimmed" size="xs">{ done } / { draft.subtasks.length }</Text></Group>{ draft.subtasks.length > 0 && <Progress size={ 4 } value={ done / draft.subtasks.length * 100 } mb="md" /> }<DndContext sensors={ subtaskSensors } collisionDetection={ closestCenter } onDragEnd={ reorderSubtasks }><SortableContext items={ draft.subtasks.map( task => task.id ) } strategy={ verticalListSortingStrategy }><Stack gap={ 9 }>{ draft.subtasks.map( task => <SortableSubtask key={ task.id } task={ task } t={ t } onChange={ updated => { setDraft( current => ( { ...current, subtasks: current.subtasks.map( item => item.id === updated.id ? updated : item ) } ) ); } } onRemove={ id => { setDraft( current => ( { ...current, subtasks: current.subtasks.filter( item => item.id !== id ) } ) ); } } /> ) }</Stack></SortableContext></DndContext><Group gap="xs" mt="sm" wrap="nowrap"><TextInput aria-label={ t( 'New subtask' ) } placeholder={ t( 'Add a subtask' ) } maxLength={ 300 } value={ subtask } style={ { flex: 1 } } onChange={ event => { setSubtask( event.currentTarget.value ); } } onKeyDown={ event => { if ( event.key === 'Enter' ) { event.preventDefault(); addSubtask(); } } } /><Tooltip label={ t( 'Add subtask' ) }><ActionIcon aria-label={ t( 'Add subtask' ) } size="lg" variant="light" disabled={ draft.subtasks.length >= 100 || !subtask.trim() } onClick={ addSubtask }><Plus size={ 18 } /></ActionIcon></Tooltip></Group></section>
-                    <section><Group justify="space-between" mb="sm"><Text size="sm" fw={ 600 }>{ t( 'Images' ) }</Text><FileButton accept="image/png,image/jpeg,image/webp" onChange={ file => { if ( !file ) { return; } void action( async () => { await uploadImages( [ file ] ); } ); } }>{ props => <Button { ...props } size="xs" variant="subtle" disabled={ busy || draft.images.length >= 6 } leftSection={ <ImagePlus size={ 15 } /> }>{ t( 'Add image' ) }</Button> }</FileButton></Group><div className="attachment-grid">{ draft.images.map( id => <div className="attachment" key={ id }><button type="button" aria-label={ t( 'View attached image' ) } onClick={ () => { setPreview( id ); } }><img src={ imageUrl( id ) } alt={ t( 'Ticket attachment' ) } onError={ event => { event.currentTarget.hidden = true; } } /></button><Tooltip label={ t( 'Remove image' ) }><ActionIcon className="attachment-remove" aria-label={ t( 'Remove image' ) } size="sm" color="red" variant="filled" onClick={ () => { void action( async () => { await saveDraft(); apply( await api<Ticket>( `${ path }/images/${ id }`, 'DELETE' ) ); } ); } }><Trash2 size={ 13 } /></ActionIcon></Tooltip></div> ) }</div></section>
+                    <section><Group justify="space-between" mb="sm"><Text size="sm" fw={ 600 }>{ t( 'Attachments' ) }</Text><Group gap={ 4 }><FileButton accept="image/png,image/jpeg,image/webp" onChange={ file => { if ( !file ) { return; } void action( async () => { await uploadImages( [ file ] ); } ); } }>{ props => <Button { ...props } size="xs" variant="subtle" disabled={ busy || draft.images.length + ( draft.videos?.length ?? 0 ) >= 6 } leftSection={ <ImagePlus size={ 15 } /> }>{ t( 'Add image' ) }</Button> }</FileButton><FileButton accept="video/mp4,video/webm,video/ogg,.mp4,.webm,.ogv" onChange={ file => { if ( !file ) { return; } void action( async () => { await uploadVideos( [ file ] ); } ); } }>{ props => <Button { ...props } size="xs" variant="subtle" disabled={ busy || draft.images.length + ( draft.videos?.length ?? 0 ) >= 6 } leftSection={ <Video size={ 15 } /> }>{ t( 'Add video' ) }</Button> }</FileButton></Group></Group><div className="attachment-grid">{ draft.images.map( id => <div className="attachment" key={ id }><button type="button" aria-label={ t( 'View attached image' ) } onClick={ () => { setPreview( id ); } }><img src={ imageUrl( id ) } alt={ t( 'Ticket attachment' ) } onError={ event => { event.currentTarget.hidden = true; } } /></button><Tooltip label={ t( 'Remove attachment' ) }><ActionIcon className="attachment-remove" aria-label={ t( 'Remove attachment' ) } size="sm" color="red" variant="filled" onClick={ () => { void action( async () => { await saveDraft(); apply( await api<Ticket>( `${ path }/images/${ id }`, 'DELETE' ) ); } ); } }><Trash2 size={ 13 } /></ActionIcon></Tooltip></div> ) }{ ( draft.videos ?? [] ).map( id => <div className="attachment" key={ id }><button type="button" className="video-thumbnail" aria-label={ t( 'View attached video' ) } onClick={ () => { setVideoPreview( id ); } }><img src={ videoThumbnailUrl( id ) } alt={ t( 'Attached video' ) } /><span><Play size={ 22 } fill="currentColor" /></span></button><Tooltip label={ t( 'Remove attachment' ) }><ActionIcon className="attachment-remove" aria-label={ t( 'Remove attachment' ) } size="sm" color="red" variant="filled" onClick={ () => { void action( async () => { await saveDraft(); apply( await api<Ticket>( `${ path }/images/${ id }`, 'DELETE' ) ); } ); } }><Trash2 size={ 13 } /></ActionIcon></Tooltip></div> ) }</div></section>
                     <section><Text size="sm" fw={ 600 } mb="md"><MessageSquare size={ 15 } className="inline-icon" /> { t( 'Comments' ) }</Text><Stack gap="md">{ draft.comments.map( item =>
                     {
                         const author = data.members.find( member => member.id === item.authorId );
@@ -326,6 +381,7 @@ export function TicketModal ( { ticket, data, account, onClose, onFocusSearch, o
         </form>
         <Modal opened={ confirm !== null } onClose={ () => { setConfirm( null ); } } title={ t( confirm === 'delete' ? 'Delete ticket?' : 'Discard changes?' ) } centered><Stack><Text size="sm">{ t( confirm === 'delete' ? 'The ticket, comments and images will be permanently deleted.' : 'Your unsaved changes will be lost.' ) }</Text><Group justify="flex-end"><Button variant="default" onClick={ () => { setConfirm( null ); } }>{ t( 'Cancel' ) }</Button><Button color="red" loading={ busy } onClick={ () => { if ( confirm === 'discard' ) { onClose(); return; } void action( async () => { await api( path, 'DELETE' ); onDelete( ticket.id ); } ); } }>{ t( confirm === 'delete' ? 'Delete permanently' : 'Discard' ) }</Button></Group></Stack></Modal>
         <Modal opened={ preview !== null } onClose={ () => { setPreview( null ); } } title={ t( 'Attached image' ) } size="xl" centered>{ preview && <img className="image-preview" src={ imageUrl( preview ) } alt={ t( 'Ticket attachment' ) } /> }</Modal>
+        <Modal opened={ videoPreview !== null } onClose={ () => { setVideoPreview( null ); } } title={ t( 'Attached video' ) } size="xl" centered>{ videoPreview && <video className="video-preview" src={ videoUrl( videoPreview ) } controls autoPlay playsInline /> }</Modal>
     </Modal>;
 }
 
