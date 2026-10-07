@@ -26,12 +26,14 @@ public sealed record UpdateBoardRequest([Required, MaxLength(80)] string Name, [
 /// <summary>Column definition.</summary>
 public sealed record ColumnRequest([Required, MaxLength(32)] string Id, [Required, MaxLength(60)] string Name, bool IsDone);
 /// <summary>New ticket in a board column.</summary>
-public sealed record CreateTicketRequest([Required, MaxLength(160)] string Title, [Required, MaxLength(32)] string ColumnId, [MaxLength(12000)] string? Description = null, [MaxLength(8)] string[]? Tags = null, string? AssigneeId = null);
+public sealed record CreateTicketRequest([Required, MaxLength(160)] string Title, [Required, MaxLength(32)] string ColumnId, [MaxLength(12000)] string? Description = null, [MaxLength(8)] string[]? Tags = null, string? AssigneeId = null, [MaxLength(100)] SubtaskRequest[]? Subtasks = null);
 public sealed record McpCreateTicketRequest(
     [Required, MaxLength(160)] string Title,
     [Required, MaxLength(32)] string ColumnId,
     [Required, MaxLength(12000)][property: Description("Required work specification: context, expected behavior and acceptance criteria. Not a progress log or completion announcement.")] string Description,
-    [Required, MinLength(1), MaxLength(8)][property: Description("Required lowercase work categories: bug, feature, design, docs, refactor, test, chore, research. Not status or priority.")] string[] Tags);
+    [Required, MinLength(1), MaxLength(8)][property: Description("Required lowercase work categories: bug, feature, design, docs, refactor, test, chore, research. Not status or priority.")] string[] Tags,
+    [MaxLength(100)][property: Description("Optional checklist. Add one subtask for each distinct actionable stage when the work has multiple stages; use separate tickets for independently deliverable work.")] McpSubtaskRequest[]? Subtasks = null);
+public sealed record McpSubtaskRequest([Required, MaxLength(300)] string Title);
 /// <summary>Editable ticket content with optimistic concurrency.</summary>
 public sealed record UpdateTicketRequest([Required, MaxLength(160)] string Title, [Required(AllowEmptyStrings = true), MaxLength(12000)] string Description, [Required, MaxLength(32)] string ColumnId, [Required, RegularExpression("^(low|normal|high|urgent)$")] string Priority, string? AssigneeId, DateTimeOffset? DueDate, double Position, [Required, MaxLength(100)] SubtaskRequest[] Subtasks, [Required, MaxLength(8)] string[] Tags, bool Archived, int Revision);
 public sealed record PatchTicketRequest(

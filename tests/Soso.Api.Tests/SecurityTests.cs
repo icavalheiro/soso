@@ -161,6 +161,9 @@ public sealed class SecurityTests
             Assert.Equal("Context, expected behavior and acceptance criteria.", saved.Description);
             Assert.Equal(new[] { "bug", "test" }, saved.Tags);
             Assert.Empty(saved.Comments);
+            var staged = tools.CreateTicket(board.Id, column, "Multi-stage work", "Complete several distinct stages", ["feature"], [new("Implement"), new("Verify")]);
+            Assert.Equal(new[] { "Implement", "Verify" }, staged.Subtasks.Select(task => task.Title));
+            Assert.All(staged.Subtasks, task => Assert.False(task.Done));
             var legacy = service.CreateTicket(board.Id, new("Browser client", column), user);
             Assert.Empty(legacy.Description);
             Assert.Empty(legacy.Tags);
@@ -607,6 +610,8 @@ public sealed class SecurityTests
         var batchCreateSchema = discoveredTools.Single(tool => tool.GetProperty("name").GetString() == "create_tickets").GetProperty("inputSchema").GetProperty("properties").GetProperty("tickets").GetProperty("items");
         Assert.Contains(batchCreateSchema.GetProperty("required").EnumerateArray(), field => field.GetString() == "description");
         Assert.Contains(batchCreateSchema.GetProperty("required").EnumerateArray(), field => field.GetString() == "tags");
+        Assert.Contains(createSchema.GetProperty("properties").EnumerateObject(), property => property.Name == "subtasks");
+        Assert.Contains(batchCreateSchema.GetProperty("properties").EnumerateObject(), property => property.Name == "subtasks");
         var patchSchema = discoveredTools.Single(tool => tool.GetProperty("name").GetString() == "update_ticket").GetProperty("inputSchema").GetProperty("properties").GetProperty("update");
         Assert.Equal("revision", Assert.Single(patchSchema.GetProperty("required").EnumerateArray()).GetString());
         var privateBoard = await CreateBoard(admin, "Administrator private board");
@@ -634,11 +639,12 @@ public sealed class SecurityTests
         Assert.DoesNotContain("Administrator private board", callBody);
         using var invalidInsert = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 14, method = "tools/call", @params = new { name = "create_ticket", arguments = new { boardId = board.Id, columnId = board.Columns[0].Id, title = "Missing specification" } } });
         Assert.Contains("\"isError\":true", await invalidInsert.Content.ReadAsStringAsync());
-        using var insert = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 4, method = "tools/call", @params = new { name = "create_tickets", arguments = new { boardId = board.Id, tickets = new[] { new McpCreateTicketRequest("MCP batch first", board.Columns[0].Id, "Requested work", ["test"]), new McpCreateTicketRequest("MCP batch second", board.Columns[0].Id, "Requested work", ["test"]) } } } });
+        using var insert = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 4, method = "tools/call", @params = new { name = "create_tickets", arguments = new { boardId = board.Id, tickets = new[] { new McpCreateTicketRequest("MCP batch first", board.Columns[0].Id, "Requested work", ["test"], [new("Stage one"), new("Stage two")]), new McpCreateTicketRequest("MCP batch second", board.Columns[0].Id, "Requested work", ["test"]) } } } });
         Assert.Equal(HttpStatusCode.OK, insert.StatusCode);
         Assert.DoesNotContain("\"isError\":true", await insert.Content.ReadAsStringAsync());
         var inserted = (await user.GetFromJsonAsync<BoardResponse>($"/api/boards/{board.Id}"))!.Tickets;
         Assert.Equal(2, inserted.Length);
+        Assert.Equal(new[] { "Stage one", "Stage two" }, inserted.Single(ticket => ticket.Title == "MCP batch first").Subtasks.Select(task => task.Title));
         var updates = inserted.Select(ticket => new { ticketId = ticket.Id, update = new { revision = ticket.Revision, description = "Protocol search needle" } }).ToArray();
         using var update = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 5, method = "tools/call", @params = new { name = "update_tickets", arguments = new { boardId = board.Id, tickets = updates } } });
         Assert.Equal(HttpStatusCode.OK, update.StatusCode);

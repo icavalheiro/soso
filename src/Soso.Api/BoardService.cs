@@ -144,6 +144,15 @@ public sealed class BoardService(Store store)
         lock (store.Gate)
         {
             ValidateInput(request);
+            var subtasks = request.Subtasks ?? [];
+            if (subtasks.Length > 100 || subtasks.Any(task => task is null))
+            {
+                throw new ApiException(400, "A ticket supports up to 100 valid subtasks.");
+            }
+            foreach (var task in subtasks)
+            {
+                ValidateInput(task);
+            }
             var board = RequireBoard(boardId, user);
             CheckColumn(board, request.ColumnId);
             var validAssignee = request.AssigneeId is null || request.AssigneeId == board.OwnerId || board.Members.Contains(request.AssigneeId);
@@ -158,7 +167,8 @@ public sealed class BoardService(Store store)
                 throw new ApiException(400, "Tags must classify software work: bug, feature, design, docs, refactor, test, chore or research.");
             }
             var position = store.Tickets.Find(ticket => ticket.BoardId == boardId).Select(ticket => ticket.Position).DefaultIfEmpty(0).Max() + 1024;
-            var ticket = new Ticket { BoardId = boardId, ColumnId = request.ColumnId, Title = Text(request.Title, 160), Description = request.Description?.Trim() ?? "", Tags = tags.Distinct().ToList(), AssigneeId = request.AssigneeId, Position = position };
+            var validSubtasks = subtasks.Select(task => new Subtask { Id = task.Id, Title = Text(task.Title, 300), Done = task.Done }).ToList();
+            var ticket = new Ticket { BoardId = boardId, ColumnId = request.ColumnId, Title = Text(request.Title, 160), Description = request.Description?.Trim() ?? "", Tags = tags.Distinct().ToList(), AssigneeId = request.AssigneeId, Position = position, Subtasks = validSubtasks };
             Track(ticket, user, "created");
             store.Tickets.Insert(ticket);
             return ticket;
