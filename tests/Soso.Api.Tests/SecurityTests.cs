@@ -464,6 +464,7 @@ public sealed class SecurityTests
         Assert.DoesNotContain("passwordHash", me);
         Assert.DoesNotContain("securityStamp", me);
         Assert.Equal("nosniff", (await client.GetAsync("/api/auth/me")).Headers.GetValues("X-Content-Type-Options").Single());
+        Assert.Contains("media-src 'self' blob:", (await client.GetAsync("/api/auth/me")).Headers.GetValues("Content-Security-Policy").Single());
     }
 
     [Fact]
