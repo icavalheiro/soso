@@ -85,11 +85,21 @@ public sealed class Store : IDisposable
         }
     }
 
-    public void SetDropboxConfiguration(string protectedCredentials)
+public void SaveDropboxAppKey(string appKey)
     {
         lock (Gate)
         {
-            DropboxConfigurations.Upsert(new DropboxBackupConfiguration { ProtectedCredentials = protectedCredentials });
+            var configuration = DropboxConfigurations.FindById("dropbox") ?? new DropboxBackupConfiguration();
+            configuration.AppKey = appKey;
+            DropboxConfigurations.Upsert(configuration);
+        }
+    }
+
+    public void SaveDropboxConnection(string appKey, string protectedCredentials)
+    {
+        lock (Gate)
+        {
+            DropboxConfigurations.Upsert(new DropboxBackupConfiguration { AppKey = appKey, ProtectedCredentials = protectedCredentials });
             var state = BackupStates.FindById("main") ?? new BackupState();
             if (state.LastBackupAt is null && state.LastBackedUpModificationAt is null)
             {
@@ -101,11 +111,30 @@ public sealed class Store : IDisposable
         }
     }
 
-    public void DeleteDropboxConfiguration()
+    public void UpdateDropboxCredentials(string protectedCredentials)
     {
         lock (Gate)
         {
-            DropboxConfigurations.Delete("dropbox");
+            var configuration = DropboxConfigurations.FindById("dropbox");
+            if (configuration is null)
+            {
+                return;
+            }
+            configuration.ProtectedCredentials = protectedCredentials;
+            DropboxConfigurations.Update(configuration);
+        }
+    }
+
+    public void DisconnectDropbox()
+    {
+        lock (Gate)
+        {
+            var configuration = DropboxConfigurations.FindById("dropbox");
+            if (configuration is not null)
+            {
+                configuration.ProtectedCredentials = "";
+                DropboxConfigurations.Update(configuration);
+            }
             var state = BackupStates.FindById("main") ?? new BackupState();
             state.LastError = null;
             state.NextBackupAttemptAt = null;

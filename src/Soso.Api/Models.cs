@@ -95,6 +95,7 @@ public sealed class AccessToken
 public sealed class DropboxBackupConfiguration
 {
     public string Id { get; set; } = "dropbox";
+    public string AppKey { get; set; } = "";
     public string ProtectedCredentials { get; set; } = "";
 }
 

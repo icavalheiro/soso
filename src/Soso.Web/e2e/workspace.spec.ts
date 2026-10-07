@@ -776,11 +776,11 @@ test( 'Dropbox missing write permission shows a clear backup alert', async ( { p
         const request = route.request();
         if ( request.method() === 'GET' )
         {
-            return route.fulfill( { json: { connected: true, appKey: 'test-app', lastBackupAt: null, lastError: savedBackupError } } );
+            return route.fulfill( { json: { connected: true, appKey: 'test-app', redirectUri: 'https://soso.test/api/admin/backup/dropbox/callback', lastBackupAt: null, lastError: savedBackupError } } );
         }
         if ( request.method() === 'POST' && new URL( request.url() ).pathname.endsWith( '/run' ) )
         {
-            savedBackupError = 'Dropbox is missing the files.content.write permission for this access token. Enable it in the Dropbox App Console, generate a new access token, then replace the saved token in Backup settings.';
+            savedBackupError = 'Dropbox is missing the files.content.write permission for the saved connection. Enable it in the Dropbox App Console, then reconnect Dropbox in Backup settings.';
             return route.fulfill( { status: 502, json: { detail: savedBackupError } } );
         }
         return route.fulfill( { status: 204 } );
@@ -792,8 +792,38 @@ test( 'Dropbox missing write permission shows a clear backup alert', async ( { p
 
     const alert = page.getByRole( 'alert', { name: 'Dropbox write permission required' } );
     await expect( alert ).toContainText( 'Dropbox App Console' );
-    await expect( alert ).toContainText( 'generate a new access token' );
-    await expect( alert ).toContainText( 'save Dropbox settings' );
+    await expect( alert ).toContainText( 'files.content.write' );
+    await expect( alert ).toContainText( 'reconnect Dropbox' );
+} );
+
+test( 'Backup settings connect Dropbox with the app key and redirect URI', async ( { page } ) =>
+{
+    await installApiMock( page );
+    let savedAppKey = '';
+    const status = () => ( { connected: false, appKey: savedAppKey, redirectUri: 'https://soso.test/api/admin/backup/dropbox/callback', lastBackupAt: null, lastError: null } );
+    await page.route( '**/api/admin/backup/dropbox/authorize', route => route.fulfill( { json: { url: '/?dropbox=connected' } } ) );
+    await page.route( '**/api/admin/backup', async route =>
+    {
+        const request = route.request();
+        if ( request.method() === 'GET' )
+        {
+            return route.fulfill( { json: status() } );
+        }
+        if ( request.method() === 'PUT' )
+        {
+            savedAppKey = request.postDataJSON().appKey;
+            return route.fulfill( { json: status() } );
+        }
+        return route.fulfill( { status: 204 } );
+    } );
+
+    await page.goto( '/' );
+    await page.getByRole( 'button', { name: 'Backup', exact: true } ).click();
+    await expect( page.getByLabel( 'Dropbox redirect URI' ) ).toHaveValue( 'https://soso.test/api/admin/backup/dropbox/callback' );
+    await page.getByLabel( 'Dropbox app key' ).fill( 'test-app' );
+    await page.getByRole( 'button', { name: 'Connect Dropbox', exact: true } ).click();
+    await expect( page.getByText( 'Dropbox connected successfully.' ) ).toBeVisible();
+    expect( savedAppKey ).toBe( 'test-app' );
 } );
 
 for ( const viewport of [ { name: 'desktop', width: 1366, height: 900 }, { name: 'mobile', width: 390, height: 844 } ] )

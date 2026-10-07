@@ -60,8 +60,8 @@ public sealed record CommentRequest([Required, MaxLength(4000)] string Text);
 public sealed record TokenRequest([Required, MaxLength(80)] string Name);
 /// <summary>Explicit board assignments for a personal MCP token.</summary>
 public sealed record UpdateTokenBoardsRequest([Required, MaxLength(1000)] string[] BoardIds);
-/// <summary>Dropbox app key and access token used for backups.</summary>
-public sealed record DropboxCredentialsRequest([Required, MaxLength(200)] string AppKey, [Required, MaxLength(4000)] string AccessToken);
+/// <summary>Dropbox app key used to start the OAuth authorization flow.</summary>
+public sealed record DropboxAppKeyRequest([Required, MaxLength(200)] string AppKey);
 /// <summary>Board and its visible tickets.</summary>
 public sealed record BoardResponse(Board Board, Ticket[] Tickets, PersonResponse[] Members);
 /// <summary>Minimal member information without private preferences or email.</summary>

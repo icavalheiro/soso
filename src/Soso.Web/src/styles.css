@@ -666,6 +666,29 @@ button:focus-visible {
     font-size: 19px;
     margin: 0 0 22px;
 }
+.dropbox-panel {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.dropbox-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    background: #0061ff;
+    color: #fff;
+    flex: 0 0 auto;
+}
+.dropbox-connect.mantine-Button-root {
+    background: #0061ff;
+    color: #fff;
+}
+.dropbox-connect.mantine-Button-root:hover {
+    background: #0057e5;
+}
 .modal-ticket-label {
     font-size: 10px;
     color: var(--muted);

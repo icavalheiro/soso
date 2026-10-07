@@ -6,45 +6,216 @@ using Microsoft.AspNetCore.DataProtection;
 
 namespace Soso.Api;
 
-public sealed record DropboxCredentials(string AppKey, string AccessToken);
+public sealed record DropboxCredentials(string AppKey, string RefreshToken, string AccessToken, DateTimeOffset AccessTokenExpiresAt);
+
+public sealed record DropboxAuthorizationState(string UserId, string AppKey, string CodeVerifier, string RedirectUri, DateTimeOffset ExpiresAt);
 
 public sealed class DropboxBackupService(Store store, IHttpClientFactory clients, IDataProtectionProvider protection, ILogger<DropboxBackupService> logger) : BackgroundService
 {
+    private static readonly TimeSpan AuthorizationLifetime = TimeSpan.FromMinutes(10);
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly JsonSerializerOptions DropboxApiJsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
     private readonly IDataProtector protector = protection.CreateProtector("Soso.DropboxBackup.Credentials.v1");
+    private readonly IDataProtector authorizationProtector = protection.CreateProtector("Soso.DropboxBackup.Authorization.v1");
     private readonly SemaphoreSlim backupGate = new(1, 1);
+    private readonly SemaphoreSlim refreshGate = new(1, 1);
 
     public string Protect(DropboxCredentials credentials) => protector.Protect(JsonSerializer.Serialize(credentials, JsonOptions));
 
-    public DropboxCredentials Unprotect(string value)
+    public DropboxCredentials Unprotect(string value) => TryUnprotect(value)
+        ?? throw new ApiException(500, "Dropbox credentials could not be read. Reconnect Dropbox.");
+
+    private DropboxCredentials? TryUnprotect(string value)
     {
+        if (string.IsNullOrEmpty(value))
+        {
+            return null;
+        }
         try
         {
-            return JsonSerializer.Deserialize<DropboxCredentials>(protector.Unprotect(value), JsonOptions)
-                ?? throw new ApiException(500, "Dropbox credentials could not be read.");
+            return JsonSerializer.Deserialize<DropboxCredentials>(protector.Unprotect(value), JsonOptions);
         }
         catch (Exception exception) when (exception is CryptographicException or JsonException)
         {
-            throw new ApiException(500, "Dropbox credentials could not be read. Reconnect Dropbox.");
+            return null;
         }
     }
 
-    public async Task ValidateAsync(DropboxCredentials credentials, CancellationToken cancellationToken)
+    public string GetAppKey(DropboxBackupConfiguration configuration)
     {
-        if (string.IsNullOrWhiteSpace(credentials.AppKey) || string.IsNullOrWhiteSpace(credentials.AccessToken))
+        if (!string.IsNullOrWhiteSpace(configuration.AppKey))
         {
-            throw new ApiException(400, "Enter both the Dropbox app key and access token.");
+            return configuration.AppKey;
         }
-        using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.dropboxapi.com/2/users/get_current_account");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", credentials.AccessToken);
-        request.Content = new StringContent("null", Encoding.UTF8, "application/json");
+        // Credentials saved before the app key was stored separately still carry it.
+        return TryUnprotect(configuration.ProtectedCredentials)?.AppKey ?? "";
+    }
+
+    public bool IsConnected(DropboxBackupConfiguration configuration)
+        => !string.IsNullOrWhiteSpace(TryUnprotect(configuration.ProtectedCredentials)?.RefreshToken);
+
+    public static string RedirectUri(HttpContext context)
+        => $"{context.Request.Scheme}://{context.Request.Host}{context.Request.PathBase}/api/admin/backup/dropbox/callback";
+
+    public string CreateAuthorizationUrl(HttpContext context, string userId)
+    {
+        var configuration = store.GetDropboxConfiguration();
+        var appKey = configuration is null ? "" : GetAppKey(configuration);
+        if (string.IsNullOrWhiteSpace(appKey))
+        {
+            throw new ApiException(400, "Enter the Dropbox app key before connecting.");
+        }
+        var redirectUri = RedirectUri(context);
+        var verifier = Base64Url(RandomNumberGenerator.GetBytes(32));
+        var challenge = Base64Url(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
+        var state = authorizationProtector.Protect(JsonSerializer.Serialize(
+            new DropboxAuthorizationState(userId, appKey, verifier, redirectUri, DateTimeOffset.UtcNow.Add(AuthorizationLifetime)), JsonOptions));
+        var parameters = new Dictionary<string, string>
+        {
+            ["client_id"] = appKey,
+            ["response_type"] = "code",
+            ["redirect_uri"] = redirectUri,
+            ["code_challenge"] = challenge,
+            ["code_challenge_method"] = "S256",
+            ["token_access_type"] = "offline",
+            ["state"] = state
+        };
+        var query = string.Join("&", parameters.Select(parameter => $"{Uri.EscapeDataString(parameter.Key)}={Uri.EscapeDataString(parameter.Value)}"));
+        return $"https://www.dropbox.com/oauth2/authorize?{query}";
+    }
+
+    public async Task<string> CompleteAuthorizationAsync(string? code, string? state, string? error, CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(error))
+        {
+            return error == "access_denied" ? "/?dropbox=cancelled" : "/?dropbox=error";
+        }
+        DropboxAuthorizationState? pending;
+        try
+        {
+            pending = string.IsNullOrWhiteSpace(state)
+                ? null
+                : JsonSerializer.Deserialize<DropboxAuthorizationState>(authorizationProtector.Unprotect(state), JsonOptions);
+        }
+        catch (Exception exception) when (exception is CryptographicException or JsonException)
+        {
+            pending = null;
+        }
+        if (pending is null || pending.ExpiresAt < DateTimeOffset.UtcNow || string.IsNullOrWhiteSpace(code))
+        {
+            logger.LogWarning("Dropbox authorization callback was rejected because its state was missing, expired or invalid.");
+            return "/?dropbox=error";
+        }
+        if (store.Accounts.FindById(pending.UserId) is not { IsAdmin: true, Disabled: false })
+        {
+            logger.LogWarning("Dropbox authorization callback was rejected because its initiating administrator is no longer active.");
+            return "/?dropbox=error";
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.dropboxapi.com/oauth2/token");
+        request.Content = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["code"] = code,
+            ["grant_type"] = "authorization_code",
+            ["client_id"] = pending.AppKey,
+            ["redirect_uri"] = pending.RedirectUri,
+            ["code_verifier"] = pending.CodeVerifier
+        });
         using var response = await clients.CreateClient().SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            throw new ApiException(400, "Dropbox rejected the access token. Check the token and its permissions.");
+            var detail = await ReadDropboxErrorAsync(response, cancellationToken);
+            logger.LogWarning("Dropbox code exchange failed with HTTP {StatusCode}; error {DropboxError}", (int)response.StatusCode, detail ?? "no error details");
+            return "/?dropbox=error";
+        }
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+        var refreshToken = document.RootElement.TryGetProperty("refresh_token", out var refresh) ? refresh.GetString() : null;
+        var accessToken = document.RootElement.TryGetProperty("access_token", out var access) ? access.GetString() : null;
+        if (string.IsNullOrWhiteSpace(refreshToken) || string.IsNullOrWhiteSpace(accessToken))
+        {
+            logger.LogWarning("Dropbox code exchange did not return an offline refresh token.");
+            return "/?dropbox=error";
+        }
+        var expiresIn = document.RootElement.TryGetProperty("expires_in", out var expires) && expires.TryGetInt32(out var seconds) ? seconds : 14400;
+        var credentials = new DropboxCredentials(pending.AppKey, refreshToken, accessToken, DateTimeOffset.UtcNow.AddSeconds(expiresIn));
+        store.SaveDropboxConnection(pending.AppKey, Protect(credentials));
+        return "/?dropbox=connected";
+    }
+
+    public async Task TryRevokeAsync(CancellationToken cancellationToken)
+    {
+        var configuration = store.GetDropboxConfiguration();
+        var credentials = configuration is null ? null : TryUnprotect(configuration.ProtectedCredentials);
+        if (credentials is null || string.IsNullOrWhiteSpace(credentials.RefreshToken))
+        {
+            return;
+        }
+        try
+        {
+            var active = await GetAccessTokenAsync(credentials, cancellationToken);
+            using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.dropboxapi.com/2/auth/token/revoke");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", active.AccessToken);
+            using var response = await clients.CreateClient().SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning("Dropbox token revocation returned HTTP {StatusCode}.", (int)response.StatusCode);
+            }
+        }
+        catch (Exception exception) when (exception is ApiException or HttpRequestException or OperationCanceledException)
+        {
+            logger.LogWarning(exception, "Dropbox token could not be revoked; the saved connection is still removed.");
         }
     }
+
+    private async Task<DropboxCredentials> GetAccessTokenAsync(DropboxCredentials credentials, CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(credentials.AccessToken) && credentials.AccessTokenExpiresAt > DateTimeOffset.UtcNow.AddMinutes(5))
+        {
+            return credentials;
+        }
+        await refreshGate.WaitAsync(cancellationToken);
+        try
+        {
+            var configuration = store.GetDropboxConfiguration();
+            var current = configuration is null ? null : TryUnprotect(configuration.ProtectedCredentials);
+            if (current is not null && current.RefreshToken == credentials.RefreshToken
+                && !string.IsNullOrWhiteSpace(current.AccessToken) && current.AccessTokenExpiresAt > DateTimeOffset.UtcNow.AddMinutes(5))
+            {
+                return current;
+            }
+            using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.dropboxapi.com/oauth2/token");
+            request.Content = new FormUrlEncodedContent(new Dictionary<string, string>
+            {
+                ["grant_type"] = "refresh_token",
+                ["refresh_token"] = credentials.RefreshToken,
+                ["client_id"] = credentials.AppKey
+            });
+            using var response = await clients.CreateClient().SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var detail = await ReadDropboxErrorAsync(response, cancellationToken);
+                logger.LogWarning("Dropbox token refresh failed with HTTP {StatusCode}; error {DropboxError}", (int)response.StatusCode, detail ?? "no error details");
+                throw new ApiException(400, "Dropbox rejected the saved connection. Reconnect Dropbox.");
+            }
+            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+            var accessToken = document.RootElement.TryGetProperty("access_token", out var access) ? access.GetString() : null;
+            if (string.IsNullOrWhiteSpace(accessToken))
+            {
+                throw new ApiException(502, "Dropbox did not return a refreshed access token. Reconnect Dropbox.");
+            }
+            var expiresIn = document.RootElement.TryGetProperty("expires_in", out var expires) && expires.TryGetInt32(out var seconds) ? seconds : 14400;
+            var refreshed = credentials with { AccessToken = accessToken, AccessTokenExpiresAt = DateTimeOffset.UtcNow.AddSeconds(expiresIn) };
+            store.UpdateDropboxCredentials(Protect(refreshed));
+            return refreshed;
+        }
+        finally
+        {
+            refreshGate.Release();
+        }
+    }
+
+    private static string Base64Url(byte[] bytes)
+        => Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     public async Task RunBackupAsync(CancellationToken cancellationToken, bool force = false)
     {
@@ -60,7 +231,7 @@ public sealed class DropboxBackupService(Store store, IHttpClientFactory clients
         try
         {
             var configuration = store.GetDropboxConfiguration();
-            if (configuration is null)
+            if (configuration is null || !IsConnected(configuration))
             {
                 if (force)
                 {
@@ -74,7 +245,7 @@ public sealed class DropboxBackupService(Store store, IHttpClientFactory clients
             {
                 return;
             }
-            var credentials = Unprotect(configuration.ProtectedCredentials);
+            var credentials = await GetAccessTokenAsync(Unprotect(configuration.ProtectedCredentials), cancellationToken);
             var changedSinceBackup = state.LastBackedUpModificationAt is null || state.LastModifiedAt > state.LastBackedUpModificationAt;
             var quietForTenMinutes = changedSinceBackup && now - state.LastModifiedAt >= TimeSpan.FromMinutes(10);
             var lastSaveAt = state.LastBackupAt ?? state.LastBackedUpModificationAt ?? state.LastModifiedAt;
@@ -221,12 +392,12 @@ public sealed class DropboxBackupService(Store store, IHttpClientFactory clients
             {
                 System.Net.HttpStatusCode.Unauthorized when detail?.Contains("missing_scope", StringComparison.OrdinalIgnoreCase) == true
                     || detail?.Contains("files.content.write", StringComparison.OrdinalIgnoreCase) == true
-                    => "Dropbox is missing the files.content.write permission for this access token. Enable it in the Dropbox App Console, generate a new access token, then replace the saved token in Backup settings.",
-                System.Net.HttpStatusCode.Unauthorized => "Dropbox rejected the access token. Reconnect with a valid token.",
-                System.Net.HttpStatusCode.Forbidden => "Dropbox denied the upload. Ensure the app has the files.content.write permission and reconnect after changing permissions.",
+                    => "Dropbox is missing the files.content.write permission for the saved connection. Enable it in the Dropbox App Console, then reconnect Dropbox in Backup settings.",
+                System.Net.HttpStatusCode.Unauthorized => "Dropbox rejected the saved connection. Reconnect Dropbox in Backup settings.",
+                System.Net.HttpStatusCode.Forbidden => "Dropbox denied the upload. Ensure the app has the files.content.write permission, then reconnect Dropbox in Backup settings.",
                 (System.Net.HttpStatusCode)507 => "Dropbox storage is full. Free up Dropbox space and try again.",
                 System.Net.HttpStatusCode.BadRequest when detail?.Contains("files.content.write", StringComparison.OrdinalIgnoreCase) == true
-                    => "The Dropbox app is missing the files.content.write permission. Enable it in the Dropbox App Console under Permissions, then generate a new access token and reconnect.",
+                    => "The Dropbox app is missing the files.content.write permission. Enable it in the Dropbox App Console under Permissions, then reconnect Dropbox in Backup settings.",
                 _ when detail is not null => $"Dropbox returned HTTP {(int)response.StatusCode} while {phase}: {detail}{(requestId is null ? "" : $" (request ID {requestId})")}",
                 _ => $"Dropbox could not store the backup (HTTP {(int)response.StatusCode} while {phase}). Check the app permissions and available Dropbox space.{(requestId is null ? "" : $" Dropbox request ID: {requestId}.")}"
             };

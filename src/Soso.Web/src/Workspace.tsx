@@ -60,8 +60,9 @@ export default function Workspace ()
     const [ selected, setSelected ] = useState<Ticket | null>( null );
     const [ boardModal, setBoardModal ] = useState<'create' | 'edit' | null>( null );
     const [ profile, setProfile ] = useState( false );
-    const [ admin, setAdmin ] = useState( false );
-    const [ backup, setBackup ] = useState( false );
+const [ admin, setAdmin ] = useState( false );
+    const [ backup, setBackup ] = useState( () => new URLSearchParams( window.location.search ).has( 'dropbox' ) );
+    const [ backupResult, setBackupResult ] = useState<string | null>( () => new URLSearchParams( window.location.search ).get( 'dropbox' ) );
     const [ newColumn, setNewColumn ] = useState<string | null>( null );
     const [ title, setTitle ] = useState( '' );
     const [ busy, setBusy ] = useState( false );
@@ -87,9 +88,17 @@ export default function Workspace ()
                 reportError( error );
             }
         } ).finally( () => { if ( alive ) { setBooting( false ); } } );
-        const expire = () => { setAccount( null ); setData( null ); setBoards( [] ); setSelected( null ); setProfile( false ); setAdmin( false ); setBackup( false ); setBoardModal( null ); };
+        const expire = () => { setAccount( null ); setData( null ); setBoards( [] ); setSelected( null ); setProfile( false ); setAdmin( false ); setBackup( false ); setBackupResult( null ); setBoardModal( null ); };
         window.addEventListener( 'soso-session-expired', expire );
         return () => { alive = false; window.removeEventListener( 'soso-session-expired', expire ); };
+    }, [] );
+
+    useEffect( () =>
+    {
+        if ( new URLSearchParams( window.location.search ).has( 'dropbox' ) )
+        {
+            window.history.replaceState( null, '', window.location.pathname + window.location.hash );
+        }
     }, [] );
 
     useEffect( () =>
@@ -316,7 +325,7 @@ export default function Workspace ()
             { boardModal && <BoardModal board={ boardModal === 'edit' ? data?.board : undefined } onClose={ () => { setBoardModal( null ); } } onSave={ board => { setBoards( previous => [ ...previous.filter( item => item.id !== board.id ), board ] ); selectBoard( board.id ); setBoardModal( null ); void api<BoardData>( `/boards/${ board.id }` ).then( setData ).catch( reportError ); } } onDelete={ id => { const remaining = boards.filter( board => board.id !== id ); setBoards( remaining ); selectBoard( remaining[ 0 ]?.id ?? '' ); setData( null ); setBoardModal( null ); } } /> }
             { profile && <ProfileModal account={ account } onChange={ setAccount } onClose={ () => { setProfile( false ); } } /> }
             { admin && <AdminModal onClose={ () => { setAdmin( false ); } } /> }
-            { backup && <BackupModal onClose={ () => { setBackup( false ); } } /> }
+            { backup && <BackupModal result={ backupResult } onClose={ () => { setBackup( false ); setBackupResult( null ); } } /> }
             { archive && data && <ArchiveModal data={ data } onClose={ () => { setArchive( false ); } } onOpen={ setSelected } onChange={ changed } /> }
         </Suspense>
         <Modal opened={ newColumn !== null } onClose={ () => { setNewColumn( null ); } } title={ t( 'New ticket' ) } centered><form onSubmit={ event => { event.preventDefault(); void createTicket(); } }><Stack><TextInput label={ t( 'Title' ) } placeholder={ t( 'What needs to happen?' ) } required maxLength={ 160 } value={ title } autoFocus onChange={ event => { setTitle( event.currentTarget.value ); } } /><Select label={ t( 'Column' ) } value={ newColumn } onChange={ setNewColumn } data={ data?.board.columns.map( column => ( { value: column.id, label: column.name } ) ) ?? [] } allowDeselect={ false } /><Button type="submit" loading={ busy } disabled={ !title.trim() }>{ t( 'Create ticket' ) }</Button></Stack></form></Modal>
