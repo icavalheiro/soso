@@ -13,4 +13,7 @@
         <PackageReference Include="xunit.runner.visualstudio" Version="3.1.0" PrivateAssets="all" />
         <ProjectReference Include="../../src/Soso.Api/Soso.Api.csproj" />
     </ItemGroup>
+    <ItemGroup>
+        <None Include="../Samples/**/*" Link="Samples/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
 </Project>

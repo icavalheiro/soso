@@ -173,7 +173,8 @@ public static class BoardEndpoints
             {
                 throw new ApiException(400, "The video content does not match its file type.");
             }
-            return (content, contentType, thumbnail);
+            content = await VideoTranscoder.ConvertToBrowserMp4Async(content, context.RequestAborted);
+            return (content, "video/mp4", thumbnail);
         }
         finally
         {
