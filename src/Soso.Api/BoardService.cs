@@ -11,6 +11,7 @@ public sealed class ApiException(int status, string message) : Exception(message
 public sealed class BoardService(Store store)
 {
     public static readonly string[] AllowedTags = ["bug", "feature", "design", "docs", "refactor", "test", "chore", "research"];
+    public static readonly string[] AllowedPriorities = ["low", "normal", "high", "urgent"];
     public static readonly string[] AllowedIcons = ["columns", "briefcase", "house", "heart", "star", "rocket", "code", "book", "graduation-cap", "plane", "wallet", "target", "calendar", "shopping", "music", "fitness", "team", "ideas", "nature", "coffee"];
     public static readonly string[] AllowedColors = ["teal", "blue", "cyan", "green", "grape", "pink", "orange", "gray"];
     public static string UserId(ClaimsPrincipal user) => user.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new ApiException(401, "Sign in required.");
@@ -167,9 +168,14 @@ public sealed class BoardService(Store store)
             var validAssignee = request.AssigneeId is null || request.AssigneeId == board.OwnerId || board.Members.Contains(request.AssigneeId);
             var tags = request.Tags ?? [];
             var validTags = tags.All(AllowedTags.Contains);
+            var validPriority = AllowedPriorities.Contains(request.Priority);
             if (!validAssignee)
             {
                 throw new ApiException(400, "Invalid ticket assignee.");
+            }
+            if (!validPriority)
+            {
+                throw new ApiException(400, "Invalid ticket priority.");
             }
             if (!validTags)
             {
@@ -177,7 +183,7 @@ public sealed class BoardService(Store store)
             }
             var position = store.Tickets.Find(ticket => ticket.BoardId == boardId).Select(ticket => ticket.Position).DefaultIfEmpty(0).Max() + 1024;
             var validSubtasks = subtasks.Select(task => new Subtask { Id = task.Id, Title = Text(task.Title, 300), Done = task.Done }).ToList();
-            var ticket = new Ticket { BoardId = boardId, ColumnId = request.ColumnId, Title = Text(request.Title, 160), Description = request.Description?.Trim() ?? "", Tags = tags.Distinct().ToList(), AssigneeId = request.AssigneeId, Position = position, Subtasks = validSubtasks };
+            var ticket = new Ticket { BoardId = boardId, ColumnId = request.ColumnId, Title = Text(request.Title, 160), Description = request.Description?.Trim() ?? "", Priority = request.Priority, Tags = tags.Distinct().ToList(), AssigneeId = request.AssigneeId, Position = position, Subtasks = validSubtasks };
             Track(ticket, user, "created");
             store.Tickets.Insert(ticket);
             return ticket;
@@ -205,7 +211,7 @@ public sealed class BoardService(Store store)
             }
             var validAssignee = request.AssigneeId is null || request.AssigneeId == board.OwnerId || board.Members.Contains(request.AssigneeId);
             var validPosition = double.IsFinite(request.Position) && Math.Abs(request.Position) < 1e12;
-            var validPriority = new[] { "low", "normal", "high", "urgent" }.Contains(request.Priority);
+            var validPriority = AllowedPriorities.Contains(request.Priority);
             var validSubtasks = request.Subtasks.Length <= 100 && request.Subtasks.Select(task => task.Id).Distinct().Count() == request.Subtasks.Length;
             var validTags = request.Tags.Length <= 8 && request.Tags.All(AllowedTags.Contains);
             if (!validAssignee || !validPosition || !validPriority || !validSubtasks || !validTags)

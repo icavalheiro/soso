@@ -256,6 +256,43 @@ public sealed class SecurityTests
     }
 
     [Fact]
+    public void McpTicketCreationSupportsPrioritiesAndRejectsInvalidValuesAtomically()
+    {
+        WithMcp((service, tools, user, accessor, store) =>
+        {
+            var board = service.Create(new("Creation priorities", ""), user);
+            var column = board.Columns[0].Id;
+
+            var defaultPriority = tools.CreateTicket(board.Id, column, "Default priority", "Requested work", ["feature"]);
+            Assert.Equal("normal", defaultPriority.Priority);
+
+            var individualTickets = new[] { "low", "normal", "high", "urgent" }
+                .Select(priority => tools.CreateTicket(board.Id, column, $"Individual {priority}", "Requested work", ["test"], priority: priority))
+                .ToArray();
+            Assert.Equal(new[] { "low", "normal", "high", "urgent" }, individualTickets.Select(ticket => ticket.Priority));
+
+            Assert.Equal(400, Assert.Throws<ApiException>(() => tools.CreateTicket(board.Id, column, "Invalid priority", "Requested work", ["test"], priority: "critical")).Status);
+
+            var batchTickets = tools.CreateTickets(board.Id,
+            [
+                new("Batch low", column, "Requested work", ["test"], Priority: "low"),
+                new("Batch default", column, "Requested work", ["test"]),
+                new("Batch high", column, "Requested work", ["test"], Priority: "high"),
+                new("Batch urgent", column, "Requested work", ["test"], Priority: "urgent")
+            ]);
+            Assert.Equal(new[] { "low", "normal", "high", "urgent" }, batchTickets.Select(ticket => ticket.Priority));
+
+            var countBeforeInvalidBatch = tools.GetBoard(board.Id).Tickets.Length;
+            Assert.Equal(400, Assert.Throws<ApiException>(() => tools.CreateTickets(board.Id,
+            [
+                new("Valid batch item", column, "Requested work", ["test"], Priority: "urgent"),
+                new("Invalid batch item", column, "Requested work", ["test"], Priority: "critical")
+            ])).Status);
+            Assert.Equal(countBeforeInvalidBatch, tools.GetBoard(board.Id).Tickets.Length);
+        });
+    }
+
+    [Fact]
     public void McpPartialUpdatesPreserveOmittedFieldsAndClearOnlyExplicitValues()
     {
         WithMcp((service, tools, user, accessor, store) =>
@@ -687,9 +724,13 @@ public sealed class SecurityTests
         var createSchema = discoveredTools.Single(tool => tool.GetProperty("name").GetString() == "create_ticket").GetProperty("inputSchema");
         Assert.Contains(createSchema.GetProperty("required").EnumerateArray(), field => field.GetString() == "description");
         Assert.Contains(createSchema.GetProperty("required").EnumerateArray(), field => field.GetString() == "tags");
+        Assert.Contains(createSchema.GetProperty("properties").EnumerateObject(), property => property.Name == "priority");
+        Assert.DoesNotContain(createSchema.GetProperty("required").EnumerateArray(), field => field.GetString() == "priority");
         var batchCreateSchema = discoveredTools.Single(tool => tool.GetProperty("name").GetString() == "create_tickets").GetProperty("inputSchema").GetProperty("properties").GetProperty("tickets").GetProperty("items");
         Assert.Contains(batchCreateSchema.GetProperty("required").EnumerateArray(), field => field.GetString() == "description");
         Assert.Contains(batchCreateSchema.GetProperty("required").EnumerateArray(), field => field.GetString() == "tags");
+        Assert.Contains(batchCreateSchema.GetProperty("properties").EnumerateObject(), property => property.Name == "priority");
+        Assert.DoesNotContain(batchCreateSchema.GetProperty("required").EnumerateArray(), field => field.GetString() == "priority");
         Assert.Contains(createSchema.GetProperty("properties").EnumerateObject(), property => property.Name == "subtasks");
         Assert.Contains(batchCreateSchema.GetProperty("properties").EnumerateObject(), property => property.Name == "subtasks");
         var patchSchema = discoveredTools.Single(tool => tool.GetProperty("name").GetString() == "update_ticket").GetProperty("inputSchema").GetProperty("properties").GetProperty("update");
@@ -719,12 +760,14 @@ public sealed class SecurityTests
         Assert.DoesNotContain("Administrator private board", callBody);
         using var invalidInsert = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 14, method = "tools/call", @params = new { name = "create_ticket", arguments = new { boardId = board.Id, columnId = board.Columns[0].Id, title = "Missing specification" } } });
         Assert.Contains("\"isError\":true", await invalidInsert.Content.ReadAsStringAsync());
-        using var insert = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 4, method = "tools/call", @params = new { name = "create_tickets", arguments = new { boardId = board.Id, tickets = new[] { new McpCreateTicketRequest("MCP batch first", board.Columns[0].Id, "Requested work", ["test"], [new("Stage one"), new("Stage two")]), new McpCreateTicketRequest("MCP batch second", board.Columns[0].Id, "Requested work", ["test"]) } } } });
+        using var insert = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 4, method = "tools/call", @params = new { name = "create_tickets", arguments = new { boardId = board.Id, tickets = new[] { new McpCreateTicketRequest("MCP batch first", board.Columns[0].Id, "Requested work", ["test"], [new("Stage one"), new("Stage two")], "urgent"), new McpCreateTicketRequest("MCP batch second", board.Columns[0].Id, "Requested work", ["test"]) } } } });
         Assert.Equal(HttpStatusCode.OK, insert.StatusCode);
         Assert.DoesNotContain("\"isError\":true", await insert.Content.ReadAsStringAsync());
         var inserted = (await user.GetFromJsonAsync<BoardResponse>($"/api/boards/{board.Id}"))!.Tickets;
         Assert.Equal(2, inserted.Length);
         Assert.Equal(new[] { "Stage one", "Stage two" }, inserted.Single(ticket => ticket.Title == "MCP batch first").Subtasks.Select(task => task.Title));
+        Assert.Equal("urgent", inserted.Single(ticket => ticket.Title == "MCP batch first").Priority);
+        Assert.Equal("normal", inserted.Single(ticket => ticket.Title == "MCP batch second").Priority);
         var updates = inserted.Select(ticket => new { ticketId = ticket.Id, update = new { revision = ticket.Revision, description = "Protocol search needle" } }).ToArray();
         using var update = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 5, method = "tools/call", @params = new { name = "update_tickets", arguments = new { boardId = board.Id, tickets = updates } } });
         Assert.Equal(HttpStatusCode.OK, update.StatusCode);
