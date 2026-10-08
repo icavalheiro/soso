@@ -783,7 +783,9 @@ test( 'ticket subtasks can be reordered and saved', async ( { page } ) =>
     const moveHandle = page.getByRole( 'button', { name: 'Move subtask: First subtask', exact: true } );
     await moveHandle.focus();
     await page.keyboard.press( 'Space' );
+    await expect( moveHandle ).toHaveAttribute( 'aria-pressed', 'true' );
     await page.keyboard.press( 'ArrowDown' );
+    await expect( page.getByText( /was moved over droppable area/ ) ).toContainText( 'was moved over droppable area' );
     await page.keyboard.press( 'Space' );
 
     const subtaskTitles = page.locator( '.subtask-row input[aria-label="Subtask title"]' );
