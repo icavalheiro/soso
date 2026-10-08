@@ -13,7 +13,7 @@ import type { Account, BoardData, Subtask, Ticket } from './api';
 import { reportError } from './feedback';
 import { useLanguage } from './useLanguage';
 
-export function TicketModal ( { ticket, data, account, onClose, onFocusSearch, onChange, onDelete }: { ticket: Ticket; data: BoardData; account: Account; onClose: () => void; onFocusSearch: () => void; onChange: ( ticket: Ticket ) => void; onDelete: ( id: string ) => void; } )
+export function TicketModal ( { ticket, data, account, focusDescription, onClose, onFocusSearch, onChange, onDelete }: { ticket: Ticket; data: BoardData; account: Account; focusDescription: boolean; onClose: () => void; onFocusSearch: () => void; onChange: ( ticket: Ticket ) => void; onDelete: ( id: string ) => void; } )
 {
     const { t } = useLanguage();
     const [ draft, setDraft ] = useState<Ticket>( () => ( { ...structuredClone( ticket ), description: ticket.description ?? '' } ) );
@@ -31,7 +31,7 @@ export function TicketModal ( { ticket, data, account, onClose, onFocusSearch, o
     const [ preview, setPreview ] = useState<string | null>( null );
     const [ videoPreview, setVideoPreview ] = useState<string | null>( null );
     const [ editingTitle, setEditingTitle ] = useState( false );
-    const [ editingDescription, setEditingDescription ] = useState( false );
+    const [ editingDescription, setEditingDescription ] = useState( focusDescription );
     const [ focusSearchOutsideModal, setFocusSearchOutsideModal ] = useState( false );
     const form = useRef<HTMLFormElement>( null );
     const subtaskSensors = useSensors( useSensor( PointerSensor, { activationConstraint: { distance: 6 } } ), useSensor( KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates } ) );
@@ -374,7 +374,7 @@ export function TicketModal ( { ticket, data, account, onClose, onFocusSearch, o
                             </Tooltip>
                         </Group>
                         { editingDescription ?
-                            <Textarea aria-label={ t( 'Description' ) } placeholder={ t( 'Add a description' ) } minRows={ 4 } autosize maxRows={ 12 } maxLength={ 12000 } autoFocus value={ draft.description } onChange={ event => { setDraft( { ...draft, description: event.currentTarget.value } ); } } onPaste={ event => { handleImagePaste( event, 'description' ); } } /> :
+                            <Textarea aria-label={ t( 'Description' ) } placeholder={ t( 'Add a description' ) } minRows={ 4 } autosize maxRows={ 12 } maxLength={ 12000 } autoFocus data-autofocus={ focusDescription || undefined } value={ draft.description } onChange={ event => { setDraft( { ...draft, description: event.currentTarget.value } ); } } onPaste={ event => { handleImagePaste( event, 'description' ); } } /> :
                             <div className="ticket-description-markdown">
                                 { ( draft.description ?? '' ).trim() ? <Markdown remarkPlugins={ [ remarkGfm ] } skipHtml components={ { img: ( { src, alt } ) => renderImageReference( src, alt ) } }>{ draft.description ?? '' }</Markdown> : <Text size="sm" c="dimmed">{ t( 'No description' ) }</Text> }
                             </div> }

@@ -298,6 +298,54 @@ test( 'new tickets are assigned to the current user', async ( { page } ) =>
     await expect.poll( () => state.data.tickets.find( ticket => ticket.title === 'Write release notes' )?.assigneeId ).toBe( state.account.id );
 } );
 
+for ( const width of [ 1366, 390 ] )
+{
+    for ( const submitMethod of [ 'Enter', 'button' ] as const )
+    {
+        test( `new ticket description is immediately editable by keyboard at ${ width }px via ${ submitMethod }`, async ( { page } ) =>
+        {
+            await page.setViewportSize( { width, height: 900 } );
+            const state = await installApiMock( page );
+            await page.goto( '/' );
+            await page.getByRole( 'button', { name: 'New ticket', exact: true } ).click();
+            const creationDialog = page.getByRole( 'dialog', { name: 'New ticket', exact: true } );
+            const title = creationDialog.getByRole( 'textbox', { name: 'Title' } );
+            await title.fill( `Keyboard-created ticket ${ width } ${ submitMethod }` );
+            if ( submitMethod === 'Enter' )
+            {
+                await title.press( 'Enter' );
+            }
+            else
+            {
+                await creationDialog.getByRole( 'button', { name: 'Create ticket', exact: true } ).click();
+            }
+
+            const editor = page.getByRole( 'textbox', { name: 'Description', exact: true } );
+            await expect( editor ).toBeVisible();
+            await expect( editor ).toBeFocused();
+            await page.clock.install();
+            await page.keyboard.type( 'Typed immediately without clicking.' );
+            await expect( editor ).toHaveValue( 'Typed immediately without clicking.' );
+
+            const autosavedDescription = 'Typed immediately without clicking and autosaved.';
+            await editor.fill( autosavedDescription );
+            await page.clock.runFor( 0 );
+            await page.clock.runFor( 10_000 );
+            await expect.poll( () => state.data.tickets.find( item => item.title === `Keyboard-created ticket ${ width } ${ submitMethod }` )?.description ).toBe( autosavedDescription );
+            await expect( editor ).toBeFocused();
+        } );
+    }
+}
+
+test( 'opening an existing ticket keeps the description in preview mode', async ( { page } ) =>
+{
+    await installApiMock( page );
+    await page.goto( '/' );
+    await page.getByRole( 'button', { name: 'Open ticket: Sketch the board layout', exact: true } ).click();
+    await expect( page.getByRole( 'textbox', { name: 'Description', exact: true } ) ).toHaveCount( 0 );
+    await expect( page.getByRole( 'button', { name: 'Edit description', exact: true } ) ).toBeVisible();
+} );
+
 test( 'ticket tag names stay in English in the localized editor', async ( { page } ) =>
 {
     await installApiMock( page );

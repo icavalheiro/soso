@@ -58,6 +58,7 @@ export default function Workspace ()
     const [ filtersOpen, setFiltersOpen ] = useState( false );
     const [ archive, setArchive ] = useState( false );
     const [ selected, setSelected ] = useState<Ticket | null>( null );
+    const [ createdTicketId, setCreatedTicketId ] = useState<string | null>( null );
     const [ boardModal, setBoardModal ] = useState<'create' | 'edit' | null>( null );
     const [ profile, setProfile ] = useState( false );
     const [ admin, setAdmin ] = useState( false );
@@ -235,7 +236,7 @@ export default function Workspace ()
             setBusy( true );
             const ticket = await api<Ticket>( `/boards/${ activeId }/tickets`, 'POST', { title, columnId: newColumn, assigneeId: account?.id } );
             setData( previous => previous ? { ...previous, tickets: [ ...previous.tickets, ticket ] } : previous );
-            setTitle( '' ); setNewColumn( null ); setSelected( ticket );
+            setTitle( '' ); setNewColumn( null ); setCreatedTicketId( ticket.id ); setSelected( ticket );
         }
         catch ( error )
         {
@@ -318,7 +319,7 @@ export default function Workspace ()
                     <Button size="xs" leftSection={ <Plus size={ 14 } /> } onClick={ () => { setNewColumn( data.board.columns[ 0 ].id ); } }>{ t( 'New ticket' ) }</Button>
                 </Group>
             </section>
-                <Suspense fallback={ <Loader m="xl" /> }><Kanban data={ data } tickets={ filtered } onOpen={ setSelected } onCreate={ setNewColumn } onMove={ move } /></Suspense></> : <div className="empty-workspace">{ boardLoading || activeId ? <Loader /> : <><Columns3 size={ 42 } strokeWidth={ 1.2 } /><h1>{ t( 'Your workspace, ready.' ) }</h1><Button leftSection={ <Plus size={ 17 } /> } onClick={ () => { setBoardModal( 'create' ); } }>{ t( 'Create a board' ) }</Button></> }</div> }
+                <Suspense fallback={ <Loader m="xl" /> }><Kanban data={ data } tickets={ filtered } onOpen={ ticket => { setCreatedTicketId( null ); setSelected( ticket ); } } onCreate={ setNewColumn } onMove={ move } /></Suspense></> : <div className="empty-workspace">{ boardLoading || activeId ? <Loader /> : <><Columns3 size={ 42 } strokeWidth={ 1.2 } /><h1>{ t( 'Your workspace, ready.' ) }</h1><Button leftSection={ <Plus size={ 17 } /> } onClick={ () => { setBoardModal( 'create' ); } }>{ t( 'Create a board' ) }</Button></> }</div> }
         </main>
         <Modal opened={ filtersOpen && data !== null } onClose={ () => { setFiltersOpen( false ); } } title={ t( 'Filters' ) } centered size="sm">
             <Stack>
@@ -329,12 +330,12 @@ export default function Workspace ()
             </Stack>
         </Modal>
         <Suspense fallback={ <Loader className="modal-loading" /> }>
-            { selected && data && <TicketModal key={ selected.id } ticket={ selected } data={ data } account={ account } onClose={ () => { setSelected( null ); } } onFocusSearch={ () => { searchInput.current?.focus(); } } onChange={ changed } onDelete={ id => { setData( previous => previous ? { ...previous, tickets: previous.tickets.filter( ticket => ticket.id !== id ) } : previous ); setSelected( null ); } } /> }
+            { selected && data && <TicketModal key={ selected.id } ticket={ selected } data={ data } account={ account } focusDescription={ createdTicketId === selected.id } onClose={ () => { setSelected( null ); setCreatedTicketId( null ); } } onFocusSearch={ () => { searchInput.current?.focus(); } } onChange={ changed } onDelete={ id => { setData( previous => previous ? { ...previous, tickets: previous.tickets.filter( ticket => ticket.id !== id ) } : previous ); setSelected( null ); setCreatedTicketId( null ); } } /> }
             { boardModal && <BoardModal board={ boardModal === 'edit' ? data?.board : undefined } onClose={ () => { setBoardModal( null ); } } onSave={ board => { setBoards( previous => [ ...previous.filter( item => item.id !== board.id ), board ] ); selectBoard( board.id ); setBoardModal( null ); void api<BoardData>( `/boards/${ board.id }` ).then( setData ).catch( reportError ); } } onDelete={ id => { const remaining = boards.filter( board => board.id !== id ); setBoards( remaining ); selectBoard( remaining[ 0 ]?.id ?? '' ); setData( null ); setBoardModal( null ); } } /> }
             { profile && <ProfileModal account={ account } onChange={ setAccount } onClose={ () => { setProfile( false ); } } /> }
             { admin && <AdminModal onClose={ () => { setAdmin( false ); } } /> }
             { backup && <BackupModal result={ backupResult } onClose={ () => { setBackup( false ); setBackupResult( null ); } } /> }
-            { archive && data && <ArchiveModal data={ data } onClose={ () => { setArchive( false ); } } onOpen={ setSelected } onChange={ changed } /> }
+            { archive && data && <ArchiveModal data={ data } onClose={ () => { setArchive( false ); } } onOpen={ ticket => { setCreatedTicketId( null ); setSelected( ticket ); } } onChange={ changed } /> }
         </Suspense>
         <Modal opened={ newColumn !== null } onClose={ () => { setNewColumn( null ); } } title={ t( 'New ticket' ) } centered><form onSubmit={ event => { event.preventDefault(); void createTicket(); } }><Stack><TextInput label={ t( 'Title' ) } placeholder={ t( 'What needs to happen?' ) } required maxLength={ 160 } value={ title } autoFocus onChange={ event => { setTitle( event.currentTarget.value ); } } /><Select label={ t( 'Column' ) } value={ newColumn } onChange={ setNewColumn } data={ data?.board.columns.map( column => ( { value: column.id, label: column.name } ) ) ?? [] } allowDeselect={ false } /><Button type="submit" loading={ busy } disabled={ !title.trim() }>{ t( 'Create ticket' ) }</Button></Stack></form></Modal>
     </div>;
