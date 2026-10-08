@@ -9,8 +9,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Soso.Api;
 using Xunit;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
+using ImageMagick;
 
 namespace Soso.Api.Tests;
 
@@ -606,10 +605,8 @@ public sealed class SecurityTests
         var mp4 = new ByteArrayContent(videoSample);
         mp4.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("video/mp4");
         videoForm.Add(mp4, "file", "video_sample.mp4");
-        using var thumbnail = new Image<Rgba32>(2, 2);
-        using var thumbnailPng = new MemoryStream();
-        await thumbnail.SaveAsPngAsync(thumbnailPng);
-        videoForm.Add(new ByteArrayContent(thumbnailPng.ToArray()), "thumbnail", "thumbnail.png");
+        using var thumbnail = new MagickImage(MagickColors.Transparent, 2, 2);
+        videoForm.Add(new ByteArrayContent(thumbnail.ToByteArray(MagickFormat.Png)), "thumbnail", "thumbnail.png");
         var videoUpload = await owner.PostAsync(path + "/videos", videoForm);
         Assert.Equal(HttpStatusCode.OK, videoUpload.StatusCode);
         var withVideo = (await videoUpload.Content.ReadFromJsonAsync<Ticket>())!;

@@ -9,6 +9,7 @@
     <ItemGroup>
         <PackageReference Include="LiteDB" Version="5.0.21" />
         <PackageReference Include="ModelContextProtocol.AspNetCore" Version="1.1.0" />
-        <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
+        <PackageReference Include="Magick.NET-Q8-x64" Version="14.17.2" Condition="$(RuntimeIdentifier.EndsWith('-x64'))" />
+        <PackageReference Include="Magick.NET-Q8-arm64" Version="14.17.2" Condition="$(RuntimeIdentifier.EndsWith('-arm64'))" />
     </ItemGroup>
 </Project>

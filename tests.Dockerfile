@@ -18,6 +18,7 @@ COPY src/Soso.Web/package.json src/Soso.Web/package-lock.json src/Soso.Web/
 RUN npm ci --prefix src/Soso.Web \
     && npm exec --prefix src/Soso.Web -- playwright install --with-deps chromium
 
+COPY Directory.Build.props ./
 COPY src/Soso.Api/Soso.Api.csproj src/Soso.Api/
 COPY tests/Soso.Api.Tests/Soso.Api.Tests.csproj tests/Soso.Api.Tests/
 RUN dotnet restore tests/Soso.Api.Tests/Soso.Api.Tests.csproj

@@ -1,7 +1,5 @@
 using System.Security.Claims;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Processing;
-using SixLabors.ImageSharp.Formats;
+using ImageMagick;
 
 namespace Soso.Api;
 
@@ -200,32 +198,30 @@ public static class BoardEndpoints
         try
         {
             await using var stream = file!.OpenReadStream();
-            var information = await Image.IdentifyAsync(stream, cancellationToken);
-            var pixels = (long)information.Width * information.Height;
-            if (pixels > 16_000_000 || information.FrameMetadataCollection.Count > 1)
+            using var content = new MemoryStream();
+            await stream.CopyToAsync(content, cancellationToken);
+            var input = content.ToArray();
+            using var information = new MagickImageCollection();
+            information.Ping(input);
+            var first = information.Count == 0 ? null : information[0];
+            var allowed = first is not null && ImageProcessing.AllowedFormats.Contains(first.Format);
+            if (!allowed || information.Count != 1 || (long)first!.Width * first.Height > 16_000_000)
             {
-                throw new ApiException(400, "Use a non-animated image up to 16 megapixels.");
+                throw new ApiException(400, "Use a single-frame PNG, JPEG, GIF, WebP, BMP or TIFF image up to 16 megapixels.");
             }
-            stream.Position = 0;
-            using var image = await Image.LoadAsync(new DecoderOptions { SkipMetadata = true }, stream, cancellationToken);
-            image.Mutate(operation => operation.Resize(new ResizeOptions { Size = new Size(1600, 1600), Mode = ResizeMode.Max }));
-            image.Metadata.ExifProfile = null;
-            image.Metadata.IccProfile = null;
-            image.Metadata.XmpProfile = null;
-            using var output = new MemoryStream();
-            await image.SaveAsPngAsync(output, cancellationToken);
-            var bytes = output.ToArray();
+            cancellationToken.ThrowIfCancellationRequested();
+            using var image = new MagickImage(input);
+            image.Resize(new MagickGeometry(1600, 1600) { Greater = true });
+            image.Strip();
+            var bytes = image.ToByteArray(MagickFormat.Png);
+            cancellationToken.ThrowIfCancellationRequested();
             if (bytes.Length > 5 * 1024 * 1024)
             {
                 throw new ApiException(400, "Processed image is too large.");
             }
             return bytes;
         }
-        catch (UnknownImageFormatException)
-        {
-            throw new ApiException(400, "Unsupported image format.");
-        }
-        catch (InvalidImageContentException)
+        catch (MagickException)
         {
             throw new ApiException(400, "Invalid image file.");
         }
