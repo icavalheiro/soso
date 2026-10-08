@@ -205,6 +205,14 @@ export default function Workspace ()
     function changed ( ticket: Ticket )
     {
         setData( previous => previous ? { ...previous, tickets: previous.tickets.map( item => item.id === ticket.id ? ticket : item ) } : previous );
+        if ( !ticket.archived && data?.board.id === ticket.boardId && !data.board.columns.some( column => column.id === ticket.columnId ) )
+        {
+            void api<BoardData>( `/boards/${ ticket.boardId }` ).then( result =>
+            {
+                setData( previous => previous?.board.id === result.board.id ? { ...previous, board: result.board } : previous );
+                setBoards( previous => previous.map( board => board.id === result.board.id ? result.board : board ) );
+            } ).catch( reportError );
+        }
     }
 
     async function move ( ticket: Ticket, columnId: string, position: number )

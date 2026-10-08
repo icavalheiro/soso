@@ -97,10 +97,14 @@ public sealed class BoardService(Store store)
             CheckRevision(board.Revision, request.Revision);
             var columnIds = request.Columns.Select(column => column.Id).ToHashSet();
             var invalidColumns = columnIds.Count != request.Columns.Length || request.Columns.Any(column => !Guid.TryParseExact(column.Id, "N", out _));
-            var hasOrphanedTickets = store.Tickets.Find(ticket => ticket.BoardId == id).Any(ticket => !columnIds.Contains(ticket.ColumnId));
-            if (invalidColumns || hasOrphanedTickets)
+            var tickets = store.Tickets.Find(ticket => ticket.BoardId == id).ToArray();
+            if (invalidColumns)
             {
-                throw new ApiException(400, "Columns must have unique IDs; move tickets before deleting a column.");
+                throw new ApiException(400, "Columns must have unique valid IDs.");
+            }
+            if (tickets.Any(ticket => !ticket.Archived && !columnIds.Contains(ticket.ColumnId)))
+            {
+                throw new ApiException(400, "Move active tickets before deleting a column.");
             }
             var invalidMembers = request.Members.Any(member => store.Accounts.FindById(member) is not { Disabled: false });
             if (invalidMembers)
@@ -112,7 +116,12 @@ public sealed class BoardService(Store store)
             board.Icon = CheckIcon(request.Icon ?? board.Icon);
             board.Color = CheckColor(request.Color ?? board.Color);
             board.Members = request.Members.Distinct().ToList();
-            board.Columns = request.Columns.Select(column => new BoardColumn { Id = column.Id, Name = Text(column.Name, 60), IsDone = column.IsDone }).ToList();
+            var columns = request.Columns.Select(column => new BoardColumn { Id = column.Id, Name = Text(column.Name, 60), IsDone = column.IsDone }).ToList();
+            var archivedColumnIds = tickets.Where(ticket => ticket.Archived).Select(ticket => ticket.ColumnId).ToHashSet();
+            board.RemovedColumns.RemoveAll(item => columnIds.Contains(item.Column.Id) || !archivedColumnIds.Contains(item.Column.Id));
+            board.RemovedColumns.AddRange(board.Columns.Select((column, index) => new RemovedBoardColumn { Column = column, Position = index })
+                .Where(item => !columnIds.Contains(item.Column.Id) && archivedColumnIds.Contains(item.Column.Id)));
+            board.Columns = columns;
             board.Revision++;
             store.Boards.Update(board);
             return board;
@@ -177,7 +186,7 @@ public sealed class BoardService(Store store)
 
     public Ticket UpdateTicket(string boardId, string ticketId, UpdateTicketRequest request, ClaimsPrincipal user)
     {
-        lock (store.Gate)
+        return store.Transaction(() =>
         {
             ValidateInput(request);
             foreach (var task in request.Subtasks)
@@ -187,7 +196,13 @@ public sealed class BoardService(Store store)
             var board = RequireBoard(boardId, user);
             var ticket = RequireTicket(boardId, ticketId, user);
             CheckRevision(ticket.Revision, request.Revision);
-            CheckColumn(board, request.ColumnId);
+            var targetColumn = board.Columns.FirstOrDefault(column => column.Id == request.ColumnId);
+            var removedColumn = board.RemovedColumns.FirstOrDefault(item => item.Column.Id == request.ColumnId);
+            var keepsRemovedColumn = ticket.Archived && ticket.ColumnId == request.ColumnId && removedColumn is not null;
+            if (targetColumn is null && !keepsRemovedColumn)
+            {
+                throw new ApiException(400, "Unknown column.");
+            }
             var validAssignee = request.AssigneeId is null || request.AssigneeId == board.OwnerId || board.Members.Contains(request.AssigneeId);
             var validPosition = double.IsFinite(request.Position) && Math.Abs(request.Position) < 1e12;
             var validPriority = new[] { "low", "normal", "high", "urgent" }.Contains(request.Priority);
@@ -218,9 +233,16 @@ public sealed class BoardService(Store store)
             ticket.Position = request.Position;
             ticket.Subtasks = request.Subtasks.Select(task => new Subtask { Id = task.Id, Title = Text(task.Title, 300), Done = task.Done }).ToList();
             ticket.Revision++;
+            if (targetColumn is null && !request.Archived)
+            {
+                board.Columns.Insert(Math.Min(removedColumn!.Position, board.Columns.Count), removedColumn.Column);
+                board.RemovedColumns.Remove(removedColumn);
+                board.Revision++;
+                store.Boards.Update(board);
+            }
             store.Tickets.Update(ticket);
             return ticket;
-        }
+        }, joinExisting: true);
     }
 
     public Ticket PatchTicket(string boardId, string ticketId, PatchTicketRequest request, ClaimsPrincipal user)
@@ -426,7 +448,8 @@ public sealed class BoardService(Store store)
 
     private string? PersonName(string? id) => id is null ? null : store.Accounts.FindById(id)?.Name ?? id;
 
-    private static string ColumnName(Board board, string id) => board.Columns.First(column => column.Id == id).Name;
+    private static string ColumnName(Board board, string id) => board.Columns.FirstOrDefault(column => column.Id == id)?.Name
+        ?? board.RemovedColumns.FirstOrDefault(item => item.Column.Id == id)?.Column.Name ?? id;
 
     private static string SubtasksValue(IEnumerable<Subtask> subtasks) => string.Join("; ", subtasks.Select(task => $"{(task.Done ? "[x]" : "[ ]")} {task.Title}"));
     private static string SubtasksValue(IEnumerable<SubtaskRequest> subtasks) => string.Join("; ", subtasks.Select(task => $"{(task.Done ? "[x]" : "[ ]")} {task.Title}"));

@@ -1,7 +1,7 @@
 export type Account = { id: string; email: string; name: string; isAdmin: boolean; disabled: boolean; avatarId: string | null; theme: 'light' | 'dark'; settings: string; boardIds: string[] | null; };
 export type Person = Pick<Account, 'id' | 'name' | 'avatarId'>;
 export type Column = { id: string; name: string; isDone: boolean; };
-export type Board = { id: string; name: string; description: string; icon: string; color: string; ownerId: string; members: string[]; columns: Column[]; revision: number; };
+export type Board = { id: string; name: string; description: string; icon: string; color: string; ownerId: string; members: string[]; columns: Column[]; removedColumns?: { column: Column; position: number; }[]; revision: number; };
 export type Subtask = { id: string; title: string; done: boolean; };
 export type Comment = { id: string; authorId: string; text: string; createdAt: string; };
 export type TicketActivity = { id: string; actorId: string; actorName: string; action: string; field: string | null; oldValue: string | null; newValue: string | null; createdAt: string; };

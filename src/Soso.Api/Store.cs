@@ -34,13 +34,17 @@ public sealed class Store : IDisposable
         }
     }
 
-    public T Transaction<T>(Func<T> operation)
+    public T Transaction<T>(Func<T> operation, bool joinExisting = false)
     {
         lock (Gate)
         {
             var started = database.BeginTrans();
             if (!started)
             {
+                if (joinExisting)
+                {
+                    return operation();
+                }
                 throw new InvalidOperationException("A transaction is already active.");
             }
             try

@@ -27,6 +27,7 @@ public sealed class Board
     public string OwnerId { get; set; } = "";
     public List<string> Members { get; set; } = [];
     public List<BoardColumn> Columns { get; set; } = [];
+    public List<RemovedBoardColumn> RemovedColumns { get; set; } = [];
     public int Revision { get; set; }
 }
 
@@ -56,6 +57,12 @@ public sealed class Ticket
     public List<TicketActivity> Activity { get; set; } = [];
     public List<string> Images { get; set; } = [];
     public List<string> Videos { get; set; } = [];
+}
+
+public sealed class RemovedBoardColumn
+{
+    public BoardColumn Column { get; set; } = new();
+    public int Position { get; set; }
 }
 
 public sealed class Subtask

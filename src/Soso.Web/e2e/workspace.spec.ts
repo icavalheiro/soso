@@ -314,6 +314,68 @@ for ( const width of [ 1366, 390 ] )
     } );
 }
 
+for ( const removedIndex of [ 0, 1 ] )
+{
+    test( `empty column ${ removedIndex + 1 } can be removed with tickets in later columns`, async ( { page } ) =>
+    {
+        const state = await installApiMock( page );
+        const removed = state.data.board.columns[ removedIndex ];
+        state.data.tickets = state.data.tickets.filter( ticket => ticket.columnId !== removed.id );
+        const tickets = structuredClone( state.data.tickets );
+        const remaining = state.data.board.columns.filter( column => column.id !== removed.id );
+        await page.goto( '/' );
+        await page.getByRole( 'button', { name: 'Board settings', exact: true } ).click();
+        await page.getByRole( 'button', { name: 'Remove column', exact: true } ).nth( removedIndex ).click();
+        const saved = page.waitForRequest( request => request.method() === 'PUT' && request.url().endsWith( `/boards/${ state.data.board.id }` ) );
+        await page.getByRole( 'button', { name: 'Save board', exact: true } ).click();
+        expect( ( await saved ).postDataJSON().columns ).toEqual( remaining );
+        await expect( page.getByRole( 'dialog' ) ).toHaveCount( 0 );
+        await expect( page.locator( '.column-header h2' ) ).toHaveText( remaining.map( column => column.name ) );
+        expect( state.data.tickets ).toEqual( tickets );
+        await page.reload();
+        await expect( page.locator( '.column-header h2' ) ).toHaveText( remaining.map( column => column.name ) );
+        await expect( page.locator( '.ticket' ) ).toHaveCount( tickets.filter( ticket => !ticket.archived ).length );
+    } );
+}
+
+test( 'restoring an archived ticket brings its removed column back immediately', async ( { page } ) =>
+{
+    const state = await installApiMock( page );
+    const column = state.data.board.columns[ 0 ];
+    const ticket = state.data.tickets[ 0 ];
+    ticket.archived = true;
+    state.data.tickets = [ ticket ];
+    state.data.board.columns = state.data.board.columns.slice( 1 );
+    state.data.board.removedColumns = [ { column, position: 0 } ];
+    await page.route( `**/api/boards/${ state.data.board.id }/tickets/${ ticket.id }`, async route =>
+    {
+        Object.assign( ticket, route.request().postDataJSON(), { revision: ticket.revision + 1 } );
+        if ( !ticket.archived )
+        {
+            state.data.board.columns.unshift( column );
+            state.data.board.removedColumns = [];
+            state.data.board.revision++;
+        }
+        await route.fulfill( { json: ticket } );
+    } );
+    await page.goto( '/' );
+    await expect( page.locator( '.column-header h2' ) ).toHaveText( [ 'In progress', 'Done' ] );
+    await page.getByRole( 'button', { name: 'Archive', exact: true } ).click();
+    await page.getByText( 'Archived', { exact: true } ).click();
+    await expect( page.locator( '.archive-row small' ) ).toHaveText( column.name );
+    await page.locator( '.archive-title' ).click();
+    await expect( page.getByRole( 'combobox', { name: 'Status', exact: true } ) ).toHaveValue( column.name );
+    await page.keyboard.press( 'Escape' );
+    await page.getByRole( 'button', { name: 'Archive', exact: true } ).click();
+    await page.getByText( 'Archived', { exact: true } ).click();
+    await page.getByRole( 'button', { name: 'Restore ticket', exact: true } ).click();
+    await page.keyboard.press( 'Escape' );
+    await expect( page.locator( '.column-header h2' ) ).toHaveText( [ 'To do', 'In progress', 'Done' ] );
+    await expect( page.locator( '.kanban-column' ).first() ).toContainText( ticket.title );
+    await page.reload();
+    await expect( page.locator( '.kanban-column' ).first() ).toContainText( ticket.title );
+} );
+
 test( 'create and edit board icons persist after reload', async ( { page }, testInfo ) =>
 {
     const state = await installApiMock( page );
@@ -618,6 +680,7 @@ test( 'ticket edits are automatically saved after ten seconds of inactivity', as
     await page.getByRole( 'button', { name: 'Open ticket: Sketch the board layout', exact: true } ).click();
     await page.getByRole( 'button', { name: 'Edit title', exact: true } ).click();
     await page.clock.install();
+    await page.clock.pauseAt( new Date() );
     const title = page.getByRole( 'textbox', { name: 'Ticket title' } );
     await title.fill( 'Edited ticket title' );
     await page.clock.runFor( 5_000 );

@@ -107,6 +107,89 @@ public sealed class SecurityTests
         }
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public async Task EmptyColumnCanBeDeletedWithTicketsInLaterColumns(int removedIndex)
+    {
+        await using var factory = new AppFactory();
+        using var client = factory.Browser();
+        await Login(client);
+        var board = await CreateBoard(client, "Column deletion");
+        foreach (var column in board.Columns.Where((_, index) => index != removedIndex))
+        {
+            var response = await client.PostAsJsonAsync($"/api/boards/{board.Id}/tickets", new CreateTicketRequest("Keep " + column.Name, column.Id));
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        }
+        var archivedResponse = await client.PostAsJsonAsync($"/api/boards/{board.Id}/tickets", new CreateTicketRequest("Archived ticket", board.Columns[2].Id));
+        var archived = (await archivedResponse.Content.ReadFromJsonAsync<Ticket>())!;
+        (await client.PutAsJsonAsync($"/api/boards/{board.Id}/tickets/{archived.Id}", Edit(archived, archived: true))).EnsureSuccessStatusCode();
+        var before = (await client.GetFromJsonAsync<BoardResponse>($"/api/boards/{board.Id}"))!;
+        var remaining = board.Columns.Where((_, index) => index != removedIndex).Select(column => new ColumnRequest(column.Id, column.Name, column.IsDone)).ToArray();
+        var update = await client.PutAsJsonAsync($"/api/boards/{board.Id}", new UpdateBoardRequest(board.Name, board.Description, [], remaining, board.Revision));
+        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+        var after = (await client.GetFromJsonAsync<BoardResponse>($"/api/boards/{board.Id}"))!;
+        Assert.Equal(remaining.Select(column => column.Id), after.Board.Columns.Select(column => column.Id));
+        Assert.Equal(remaining.Select(column => column.Name), after.Board.Columns.Select(column => column.Name));
+        Assert.Equal(remaining.Select(column => column.IsDone), after.Board.Columns.Select(column => column.IsDone));
+        Assert.Equal(JsonSerializer.Serialize(before.Tickets, JsonOptions), JsonSerializer.Serialize(after.Tickets, JsonOptions));
+    }
+
+    [Fact]
+    public void ArchivedTicketsAllowColumnDeletionAndRestoreItsDefinitionAtomically()
+    {
+        WithMcp((service, tools, user, accessor, store) =>
+        {
+            var board = service.Create(new("Removed columns", ""), user);
+            var original = board.Columns[0];
+            var tickets = tools.CreateTickets(board.Id, [new("First", original.Id, "Preserve this ticket", ["test"]), new("Second", original.Id, "Preserve this ticket", ["test"])]);
+            UpdateBoardRequest WithoutColumn() => new(board.Name, board.Description, [], board.Columns.Where(column => column.Id != original.Id).Select(column => new ColumnRequest(column.Id, column.Name, column.IsDone)).ToArray(), board.Revision);
+            Assert.Equal(400, Assert.Throws<ApiException>(() => service.Update(board.Id, WithoutColumn(), user)).Status);
+            tickets = tools.UpdateTickets(board.Id, tickets.Select(ticket => new BatchTicketUpdateRequest(ticket.Id, new(ticket.Revision, Archived: true))).ToArray());
+            board = service.Update(board.Id, WithoutColumn(), user);
+            Assert.DoesNotContain(board.Columns, column => column.Id == original.Id);
+            Assert.Equal(original.Name, Assert.Single(board.RemovedColumns).Column.Name);
+            Assert.All(tools.GetBoard(board.Id).Tickets, ticket => Assert.True(ticket.Archived));
+            var edited = tools.UpdateTicket(board.Id, tickets[0].Id, new(tickets[0].Revision, Title: "Edited in archive"));
+            Assert.DoesNotContain(tools.GetBoard(board.Id).Board.Columns, column => column.Id == original.Id);
+            var revision = board.Revision;
+            Assert.Equal(409, Assert.Throws<ApiException>(() => tools.UpdateTicket(board.Id, edited.Id, new(tickets[0].Revision, Archived: false))).Status);
+            Assert.Equal(409, Assert.Throws<ApiException>(() => tools.UpdateTickets(board.Id, [new(edited.Id, new(edited.Revision, Archived: false)), new(tickets[1].Id, new(-1, Archived: false))])).Status);
+            var rolledBack = tools.GetBoard(board.Id);
+            Assert.Equal(revision, rolledBack.Board.Revision);
+            Assert.DoesNotContain(rolledBack.Board.Columns, column => column.Id == original.Id);
+            Assert.All(rolledBack.Tickets, ticket => Assert.True(ticket.Archived));
+            tools.UpdateTicket(board.Id, edited.Id, new(edited.Revision, Archived: false));
+            var restored = tools.GetBoard(board.Id);
+            Assert.Equal(original.Id, restored.Board.Columns[0].Id);
+            Assert.Equal(original.Name, restored.Board.Columns[0].Name);
+            Assert.Equal(original.IsDone, restored.Board.Columns[0].IsDone);
+            Assert.Equal(revision + 1, restored.Board.Revision);
+            Assert.Empty(restored.Board.RemovedColumns);
+            Assert.False(restored.Tickets.Single(ticket => ticket.Id == edited.Id).Archived);
+            Assert.True(restored.Tickets.Single(ticket => ticket.Id == tickets[1].Id).Archived);
+            Assert.Equal(409, Assert.Throws<ApiException>(() => service.Update(board.Id, WithoutColumn(), user)).Status);
+            tools.UpdateTicket(board.Id, tickets[1].Id, new(tickets[1].Revision, Archived: false));
+            Assert.Single(tools.GetBoard(board.Id).Board.Columns, column => column.Id == original.Id);
+        });
+    }
+
+    [Fact]
+    public void RestoringIntoAnotherColumnDoesNotRestoreRemovedColumn()
+    {
+        WithMcp((service, tools, user, accessor, store) =>
+        {
+            var board = service.Create(new("Restore elsewhere", ""), user);
+            var original = board.Columns[2];
+            var ticket = tools.CreateTicket(board.Id, original.Id, "Archived", "Restore elsewhere", ["test"]);
+            ticket = tools.UpdateTicket(board.Id, ticket.Id, new(ticket.Revision, Archived: true));
+            board = service.Update(board.Id, new(board.Name, "", [], board.Columns.Take(2).Select(column => new ColumnRequest(column.Id, column.Name, column.IsDone)).ToArray(), board.Revision), user);
+            ticket = tools.UpdateTicket(board.Id, ticket.Id, new(ticket.Revision, Archived: false, ColumnId: board.Columns[0].Id));
+            Assert.False(ticket.Archived);
+            Assert.DoesNotContain(tools.GetBoard(board.Id).Board.Columns, column => column.Id == original.Id);
+        });
+    }
+
     [Fact]
     public void McpBatchesAreAtomicAndRespectRevisionsAndAccess()
     {
