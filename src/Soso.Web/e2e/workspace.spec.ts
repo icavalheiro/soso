@@ -592,7 +592,7 @@ test( 'ticket subtasks, comments and images', async ( { page } ) =>
     await expect( activity ).toContainText( 'added a comment' );
     await expect( activity ).toContainText( 'Maya Chen' );
     expect( failures ).toEqual( [] );
-    await page.locator( 'input[type=file][accept^="image/"]' ).setInputFiles( 'public/logo.jpg' );
+    await page.locator( 'input[type=file][accept^="image/"]' ).setInputFiles( 'public/logo.png' );
     await expect( page.getByAltText( 'Ticket attachment', { exact: true } ) ).toBeVisible();
     await page.getByRole( 'button', { name: 'Save changes' } ).click();
     await expect( page.getByRole( 'dialog' ) ).toHaveCount( 0 );
@@ -627,6 +627,63 @@ test( 'ticket edits are automatically saved after ten seconds of inactivity', as
     expect( state.data.tickets[ 0 ].title ).toBe( 'Sketch the board layout' );
     await page.clock.runFor( 1 );
     await expect.poll( () => state.data.tickets[ 0 ].title ).toBe( 'Automatically saved title' );
+} );
+
+test( 'autosave keeps focus on the field being edited', async ( { page } ) =>
+{
+    const state = await installApiMock( page );
+    await page.goto( '/' );
+    await page.getByRole( 'button', { name: 'Open ticket: Sketch the board layout', exact: true } ).click();
+    await page.clock.install();
+    await page.getByRole( 'button', { name: 'Edit description', exact: true } ).click();
+    const editor = page.getByRole( 'textbox', { name: 'Description', exact: true } );
+    await expect( editor ).toBeFocused();
+    await editor.fill( 'Keeps focus while saving' );
+    await page.clock.runFor( 10_000 );
+    await expect.poll( () => state.data.tickets[ 0 ].description ).toBe( 'Keeps focus while saving' );
+    await expect( editor ).toBeFocused();
+} );
+
+test( 'autosave does not overwrite edits made while a save is in flight', async ( { page } ) =>
+{
+    const state = await installApiMock( page );
+    let releasePut: ( () => void ) | null = null;
+    async function nextPut ()
+    {
+        await expect.poll( () => releasePut ).not.toBeNull();
+        const release = releasePut!;
+        releasePut = null;
+        return release;
+    }
+    await page.route( `**/api/boards/${ state.data.board.id }/tickets/ticket-0`, async route =>
+    {
+        if ( route.request().method() !== 'PUT' )
+        {
+            return route.fallback();
+        }
+        const body = route.request().postDataJSON();
+        await new Promise<void>( resolve => { releasePut = resolve; } );
+        const ticket = state.data.tickets.find( item => item.id === 'ticket-0' )!;
+        Object.assign( ticket, body, { revision: ticket.revision + 1 } );
+        await route.fulfill( { json: ticket } );
+    } );
+    await page.goto( '/' );
+    await page.getByRole( 'button', { name: 'Open ticket: Sketch the board layout', exact: true } ).click();
+    await page.clock.install();
+    await page.getByRole( 'button', { name: 'Edit description', exact: true } ).click();
+    const editor = page.getByRole( 'textbox', { name: 'Description', exact: true } );
+    await expect( editor ).toBeFocused();
+    await editor.fill( 'Base text' );
+    await page.clock.runFor( 10_000 );
+    const firstRelease = await nextPut();
+    await editor.fill( 'Base text plus a newer edit' );
+    firstRelease();
+    await expect( editor ).toHaveValue( 'Base text plus a newer edit' );
+    await expect( editor ).toBeFocused();
+    await page.clock.runFor( 10_000 );
+    const secondRelease = await nextPut();
+    secondRelease();
+    await expect.poll( () => state.data.tickets[ 0 ].description ).toBe( 'Base text plus a newer edit' );
 } );
 
 test( 'ticket keyboard shortcuts save and close the editor and focus search', async ( { page } ) =>

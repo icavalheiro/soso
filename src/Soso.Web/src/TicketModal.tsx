@@ -21,8 +21,10 @@ export function TicketModal ( { ticket, data, account, onClose, onFocusSearch, o
     const [ comment, setComment ] = useState( '' );
     const postingComment = useRef( false );
     const savingDraft = useRef<Promise<Ticket> | null>( null );
-    const autoSaveTimer = useRef<number | null>( null);
+    const autoSaveTimer = useRef<number | null>( null );
     const autoSave = useRef( () => {} );
+    const draftRef = useRef( draft );
+    draftRef.current = draft;
     const [ subtask, setSubtask ] = useState( '' );
     const [ busy, setBusy ] = useState( false );
     const [ confirm, setConfirm ] = useState<'delete' | 'discard' | null>( null );
@@ -93,8 +95,8 @@ export function TicketModal ( { ticket, data, account, onClose, onFocusSearch, o
         {
             return savingDraft.current;
         }
-        const dirty = JSON.stringify( ticketBody( draft ) ) !== baseline;
-        if ( !dirty )
+        const snapshot = JSON.stringify( ticketBody( draft ) );
+        if ( snapshot === baseline )
         {
             return draft;
         }
@@ -103,7 +105,15 @@ export function TicketModal ( { ticket, data, account, onClose, onFocusSearch, o
         try
         {
             const result = await request;
-            apply( result );
+            if ( JSON.stringify( ticketBody( draftRef.current ) ) === snapshot )
+            {
+                apply( result );
+            }
+            else
+            {
+                setDraft( { ...draftRef.current, revision: result.revision } );
+                setBaseline( JSON.stringify( { ...ticketBody( draft ), revision: result.revision } ) );
+            }
             return result;
         }
         finally
@@ -132,7 +142,7 @@ export function TicketModal ( { ticket, data, account, onClose, onFocusSearch, o
         }
     }
 
-    autoSave.current = () => { void action( async () => { await saveDraft(); } ); };
+    autoSave.current = () => { void saveDraft().catch( reportError ); };
 
     useEffect( () =>
     {
