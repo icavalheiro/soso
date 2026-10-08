@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import { LanguageContext, type Language } from './language-context';
+import { LanguageContext, resolveLanguage, type Language } from './language-context';
 
 const translations: Record<string, string> = {
     'Organizing your life :D': 'Organizando tua vida :D', 'Boards': 'Quadros', 'What needs to happen?': 'O que precisa ser feito?',
@@ -67,7 +67,8 @@ export function LanguageProvider ( { children }: { children: ReactNode; } )
     const [ language, setLanguageState ] = useState<Language>( () =>
     {
         const saved = localStorage.getItem( 'soso-language' );
-        return saved === 'pt-BR' || saved === 'es-MX' ? saved : 'en';
+        const preferredLanguages = navigator.languages.length > 0 ? navigator.languages : [ navigator.language ];
+        return resolveLanguage( saved, preferredLanguages );
     } );
     useEffect( () => { document.documentElement.lang = language; }, [ language ] );
     function setLanguage ( next: Language )

@@ -1,6 +1,83 @@
 import { test, expect } from '@playwright/test';
 import { installApiMock } from './fixtures';
 
+test( 'login and an account without saved settings use the first supported browser language variant', async ( { page } ) =>
+{
+    await page.addInitScript( () =>
+    {
+        Object.defineProperty( navigator, 'languages', { configurable: true, get: () => [ 'fr-FR', 'pt-PT', 'es-ES' ] } );
+        Object.defineProperty( navigator, 'language', { configurable: true, get: () => 'fr-FR' } );
+    } );
+    const state = await installApiMock( page, false );
+    state.account.settings = '';
+    await page.goto( '/' );
+    await expect( page.locator( 'html' ) ).toHaveAttribute( 'lang', 'pt-BR' );
+    await expect( page.getByRole( 'button', { name: 'Entrar', exact: true } ) ).toBeVisible();
+
+    await page.getByLabel( 'E-mail' ).fill( state.account.email );
+    await page.getByRole( 'textbox', { name: /^Senha/ } ).fill( 'Test-only-browser-password!' );
+    await page.getByRole( 'button', { name: 'Entrar', exact: true } ).click();
+    await expect( page.locator( '.brand strong' ) ).toHaveText( 'SosôOrganizando tua vida :D' );
+    await expect( page.locator( 'html' ) ).toHaveAttribute( 'lang', 'pt-BR' );
+} );
+
+test( 'browser language variants respect browser preference order', async ( { page } ) =>
+{
+    await page.addInitScript( () =>
+    {
+        Object.defineProperty( navigator, 'languages', { configurable: true, get: () => [ 'es-ES', 'pt-PT' ] } );
+        Object.defineProperty( navigator, 'language', { configurable: true, get: () => 'es-ES' } );
+    } );
+    await installApiMock( page, false );
+    await page.goto( '/' );
+    await expect( page.locator( 'html' ) ).toHaveAttribute( 'lang', 'es-MX' );
+    await expect( page.getByRole( 'button', { name: 'Iniciar sesión', exact: true } ) ).toBeVisible();
+} );
+
+test( 'a valid saved language takes precedence over browser preferences', async ( { page } ) =>
+{
+    await page.addInitScript( () =>
+    {
+        localStorage.setItem( 'soso-language', 'en' );
+        Object.defineProperty( navigator, 'languages', { configurable: true, get: () => [ 'pt-BR' ] } );
+        Object.defineProperty( navigator, 'language', { configurable: true, get: () => 'pt-BR' } );
+    } );
+    await installApiMock( page, false );
+    await page.goto( '/' );
+    await expect( page.locator( 'html' ) ).toHaveAttribute( 'lang', 'en' );
+    await expect( page.getByRole( 'button', { name: 'Sign in', exact: true } ) ).toBeVisible();
+} );
+
+for ( const browserLanguage of [ 'en-GB', 'pt-PT' ] )
+{
+    test( `an empty browser language list falls back to navigator.language (${browserLanguage})`, async ( { page } ) =>
+    {
+        await page.addInitScript( ( language ) =>
+        {
+            Object.defineProperty( navigator, 'languages', { configurable: true, get: () => [] } );
+            Object.defineProperty( navigator, 'language', { configurable: true, get: () => language } );
+        }, browserLanguage );
+        await installApiMock( page, false );
+        await page.goto( '/' );
+        const expectedLanguage = browserLanguage === 'pt-PT' ? 'pt-BR' : 'en';
+        await expect( page.locator( 'html' ) ).toHaveAttribute( 'lang', expectedLanguage );
+        await expect( page.getByRole( 'button', { name: expectedLanguage === 'pt-BR' ? 'Entrar' : 'Sign in', exact: true } ) ).toBeVisible();
+    } );
+}
+
+test( 'unsupported browser languages and invalid saved values use the English fallback', async ( { page } ) =>
+{
+    await page.addInitScript( () =>
+    {
+        localStorage.setItem( 'soso-language', 'fr-FR' );
+        Object.defineProperty( navigator, 'languages', { configurable: true, get: () => [ 'fr-FR', 'de-DE' ] } );
+    } );
+    await installApiMock( page, false );
+    await page.goto( '/' );
+    await expect( page.locator( 'html' ) ).toHaveAttribute( 'lang', 'en' );
+    await expect( page.getByRole( 'button', { name: 'Sign in', exact: true } ) ).toBeVisible();
+} );
+
 for ( const width of [ 1366, 390 ] )
 {
     for ( const systemTheme of [ 'light', 'dark' ] as const )
