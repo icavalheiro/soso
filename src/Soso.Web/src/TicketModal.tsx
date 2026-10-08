@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ClipboardEvent } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -24,7 +24,7 @@ export function TicketModal ( { ticket, data, account, focusDescription, onClose
     const autoSaveTimer = useRef<number | null>( null );
     const autoSave = useRef( () => {} );
     const draftRef = useRef( draft );
-    draftRef.current = draft;
+    useLayoutEffect( () => { draftRef.current = draft; }, [ draft ] );
     const [ subtask, setSubtask ] = useState( '' );
     const [ busy, setBusy ] = useState( false );
     const [ confirm, setConfirm ] = useState<'delete' | 'discard' | null>( null );
@@ -86,6 +86,31 @@ export function TicketModal ( { ticket, data, account, focusDescription, onClose
         onChange( normalized );
     }
 
+    useEffect( () =>
+    {
+        const incoming = { ...ticket, description: ticket.description ?? '' };
+        const current = draftRef.current;
+        if ( incoming.revision <= current.revision )
+        {
+            return;
+        }
+        const previousBaseline = JSON.parse( baseline ) as ReturnType<typeof ticketBody>;
+        const currentBody = ticketBody( current );
+        const incomingBody = ticketBody( incoming );
+        const rebased = { ...incoming };
+        rebased.revision = incoming.revision;
+        for ( const key of Object.keys( currentBody ) as Array<keyof typeof currentBody> )
+        {
+            if ( key !== 'revision' && JSON.stringify( currentBody[ key ] ) !== JSON.stringify( previousBaseline[ key ] ) )
+            {
+                Object.assign( rebased, { [ key ]: currentBody[ key ] } );
+            }
+        }
+        draftRef.current = rebased;
+        setDraft( rebased );
+        setBaseline( JSON.stringify( incomingBody ) );
+    }, [ ticket, baseline ] );
+
     async function saveDraft ()
     {
         if ( autoSaveTimer.current !== null )
@@ -107,6 +132,10 @@ export function TicketModal ( { ticket, data, account, focusDescription, onClose
         try
         {
             const result = await request;
+            if ( result.revision < draftRef.current.revision )
+            {
+                return result;
+            }
             if ( JSON.stringify( ticketBody( draftRef.current ) ) === snapshot )
             {
                 apply( result );
@@ -144,7 +173,7 @@ export function TicketModal ( { ticket, data, account, focusDescription, onClose
         }
     }
 
-    autoSave.current = () => { void saveDraft().catch( reportError ); };
+    useEffect( () => { autoSave.current = () => { void saveDraft().catch( reportError ); }; } );
 
     useEffect( () =>
     {

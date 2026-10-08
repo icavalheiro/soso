@@ -8,7 +8,7 @@ public sealed class ApiException(int status, string message) : Exception(message
     public int Status { get; } = status;
 }
 
-public sealed class BoardService(Store store)
+public sealed class BoardService(Store store, BoardEventHub? events = null)
 {
     public static readonly string[] AllowedTags = ["bug", "feature", "design", "docs", "refactor", "test", "chore", "research"];
     public static readonly string[] AllowedPriorities = ["low", "normal", "high", "urgent"];
@@ -86,6 +86,8 @@ public sealed class BoardService(Store store)
         lock (store.Gate)
         {
             store.Boards.Insert(board);
+            var audience = BoardAudience(board);
+            store.AfterCommit(() => events?.Publish(board.Id, audience), $"board:{board.Id}");
         }
         return board;
     }
@@ -95,6 +97,7 @@ public sealed class BoardService(Store store)
         lock (store.Gate)
         {
             var board = RequireBoard(id, user, true);
+            var previousAudience = BoardAudience(board);
             CheckRevision(board.Revision, request.Revision);
             var columnIds = request.Columns.Select(column => column.Id).ToHashSet();
             var invalidColumns = columnIds.Count != request.Columns.Length || request.Columns.Any(column => !Guid.TryParseExact(column.Id, "N", out _));
@@ -125,6 +128,8 @@ public sealed class BoardService(Store store)
             board.Columns = columns;
             board.Revision++;
             store.Boards.Update(board);
+            var currentAudience = BoardAudience(board);
+            store.AfterCommit(() => events?.Publish(board.Id, currentAudience.Concat(previousAudience).Distinct(StringComparer.Ordinal)), $"board:{board.Id}");
             return board;
         }
     }
@@ -186,6 +191,7 @@ public sealed class BoardService(Store store)
             var ticket = new Ticket { BoardId = boardId, ColumnId = request.ColumnId, Title = Text(request.Title, 160), Description = request.Description?.Trim() ?? "", Priority = request.Priority, Tags = tags.Distinct().ToList(), AssigneeId = request.AssigneeId, Position = position, Subtasks = validSubtasks };
             Track(ticket, user, "created");
             store.Tickets.Insert(ticket);
+            PublishChange(boardId);
             return ticket;
         }
     }
@@ -247,6 +253,7 @@ public sealed class BoardService(Store store)
                 store.Boards.Update(board);
             }
             store.Tickets.Update(ticket);
+            PublishChange(boardId);
             return ticket;
         }, joinExisting: true);
     }
@@ -372,6 +379,7 @@ public sealed class BoardService(Store store)
             Track(ticket, user, "comment_added", "comment", null, content);
             ticket.Revision++;
             store.Tickets.Update(ticket);
+            PublishChange(boardId);
             return ticket;
         }
     }
@@ -391,6 +399,7 @@ public sealed class BoardService(Store store)
             Track(ticket, user, "comment_deleted", "comment", comment.Text);
             ticket.Revision++;
             store.Tickets.Update(ticket);
+            PublishChange(boardId);
             return ticket;
         }
     }
@@ -416,6 +425,7 @@ public sealed class BoardService(Store store)
             Track(ticket, user, "image_added", "image", null, image.Id);
             ticket.Revision++;
             store.Tickets.Update(ticket);
+            PublishChange(boardId);
             return ticket;
         }
     }
@@ -433,9 +443,59 @@ public sealed class BoardService(Store store)
             Track(ticket, user, "image_removed", "image", imageId);
             ticket.Revision++;
             store.Tickets.Update(ticket);
+            PublishChange(boardId);
             return ticket;
         }
     }
+
+    public void DeleteBoard(string id, ClaimsPrincipal user)
+    {
+        lock (store.Gate)
+        {
+            var board = RequireBoard(id, user, true);
+            var audience = BoardAudience(board);
+            store.Tickets.DeleteMany(ticket => ticket.BoardId == id);
+            store.Images.DeleteMany(image => image.BoardId == id);
+            store.Boards.Delete(id);
+            store.AfterCommit(() => events?.Publish(id, audience), $"board:{id}");
+        }
+    }
+
+    public void DeleteTicket(string boardId, string ticketId, ClaimsPrincipal user)
+    {
+        lock (store.Gate)
+        {
+            var ticket = RequireTicket(boardId, ticketId, user);
+            foreach (var image in ticket.Images.Concat(ticket.Videos))
+            {
+                store.Images.Delete(image);
+            }
+            store.Tickets.Delete(ticketId);
+            PublishChange(boardId);
+        }
+    }
+
+    private void PublishChange(string boardId, IEnumerable<string>? previousAudience = null)
+    {
+        if (events is null)
+        {
+            return;
+        }
+        string[] audience;
+        lock (store.Gate)
+        {
+            var board = store.Boards.FindById(boardId);
+            audience = board is null ? previousAudience?.Distinct(StringComparer.Ordinal).ToArray() ?? []
+                : BoardAudience(board).Concat(previousAudience ?? []).Distinct(StringComparer.Ordinal).ToArray();
+        }
+        store.AfterCommit(() => events.Publish(boardId, audience), $"board:{boardId}");
+    }
+
+    private string[] BoardAudience(Board board) => store.Accounts.FindAll()
+        .Where(account => !account.Disabled && (account.IsAdmin || (account.BoardIds is not null
+            ? account.BoardIds.Contains(board.Id)
+            : account.Id == board.OwnerId || board.Members.Contains(account.Id))))
+        .Select(account => account.Id).Distinct(StringComparer.Ordinal).ToArray();
 
     private void TrackChange(Ticket ticket, ClaimsPrincipal user, string field, string? oldValue, string? newValue)
     {

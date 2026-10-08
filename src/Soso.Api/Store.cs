@@ -5,6 +5,9 @@ namespace Soso.Api;
 public sealed class Store : IDisposable
 {
     private readonly LiteDatabase database;
+    private readonly List<Action> afterCommit = [];
+    private readonly HashSet<string> afterCommitKeys = new(StringComparer.Ordinal);
+    private bool transactionActive;
     public object Gate { get; } = new();
     public ILiteCollection<Account> Accounts => database.GetCollection<Account>("accounts");
     public ILiteCollection<Board> Boards => database.GetCollection<Board>("boards");
@@ -47,18 +50,48 @@ public sealed class Store : IDisposable
                 }
                 throw new InvalidOperationException("A transaction is already active.");
             }
+            transactionActive = true;
+            T result;
             try
             {
-                var result = operation();
+                result = operation();
                 database.Commit();
-                return result;
             }
             catch
             {
                 database.Rollback();
+                transactionActive = false;
+                afterCommit.Clear();
+                afterCommitKeys.Clear();
                 throw;
             }
+            transactionActive = false;
+            var callbacks = afterCommit.ToArray();
+            afterCommit.Clear();
+            afterCommitKeys.Clear();
+            foreach (var callback in callbacks)
+            {
+                callback();
+            }
+            return result;
         }
+    }
+
+    public void AfterCommit(Action callback, string? key = null)
+    {
+        lock (Gate)
+        {
+            if (transactionActive)
+            {
+                if (key is not null && !afterCommitKeys.Add(key))
+                {
+                    return;
+                }
+                afterCommit.Add(callback);
+                return;
+            }
+        }
+        callback();
     }
 
     public void Dispose() => database.Dispose();

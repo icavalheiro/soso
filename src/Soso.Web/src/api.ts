@@ -8,6 +8,7 @@ export type TicketActivity = { id: string; actorId: string; actorName: string; a
 export type Ticket = { id: string; boardId: string; columnId: string; title: string; description: string; priority: string; tags: string[]; archived: boolean; assigneeId: string | null; dueDate: string | null; position: number; revision: number; subtasks: Subtask[]; comments: Comment[]; activity: TicketActivity[]; images: string[]; videos: string[]; };
 export type BoardData = { board: Board; tickets: Ticket[]; members: Person[]; };
 export type Token = { id: string; name: string; expiresAt: string; boardIds: string[]; };
+export type BoardChangedEvent = { boardId: string | null; };
 let csrfToken = '';
 
 export async function refreshCsrf ()
@@ -78,6 +79,78 @@ export function ticketBody ( ticket: Ticket )
 {
     const { title, description, columnId, priority, assigneeId, dueDate, position, subtasks, tags, archived, revision } = ticket;
     return { title, description: description ?? '', columnId, priority, assigneeId, dueDate, position, subtasks, tags, archived, revision };
+}
+
+export function connectBoardEvents ( onChange: ( event: BoardChangedEvent ) => void, onReconnect: () => void )
+{
+    let stopped = false;
+    let socket: WebSocket | null = null;
+    let retryTimer = 0;
+    let retryDelay = 500;
+
+    function connect ()
+    {
+        if ( stopped )
+        {
+            return;
+        }
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        socket = new WebSocket( `${ protocol }//${ window.location.host }/api/events` );
+        socket.onopen = () =>
+        {
+            retryDelay = 500;
+            onReconnect();
+        };
+        socket.onmessage = message =>
+        {
+            try
+            {
+                const event = JSON.parse( String( message.data ) ) as BoardChangedEvent;
+                if ( event.boardId === null || typeof event.boardId === 'string' )
+                {
+                    onChange( event );
+                }
+            }
+            catch
+            {
+                // Ignore malformed events and keep the connection alive.
+            }
+        };
+        socket.onclose = () => scheduleReconnect();
+        socket.onerror = () =>
+        {
+            if ( socket?.readyState !== WebSocket.CLOSED )
+            {
+                socket?.close();
+            }
+            else
+            {
+                scheduleReconnect();
+            }
+        };
+    }
+
+    function scheduleReconnect ()
+    {
+        if ( stopped || retryTimer )
+        {
+            return;
+        }
+        retryTimer = window.setTimeout( () =>
+        {
+            retryTimer = 0;
+            connect();
+        }, retryDelay );
+        retryDelay = Math.min( retryDelay * 2, 15_000 );
+    }
+
+    connect();
+    return () =>
+    {
+        stopped = true;
+        window.clearTimeout( retryTimer );
+        socket?.close();
+    };
 }
 
 export function videoUrl ( id: string | null | undefined )

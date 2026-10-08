@@ -41,6 +41,7 @@ Directory.CreateDirectory(dataPath);
 builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(dataPath, "keys")));
 builder.Services.AddSingleton<Store>();
 builder.Services.AddSingleton<BoardService>();
+builder.Services.AddSingleton<BoardEventHub>();
 builder.Services.AddHttpClient();
 builder.Services.AddSingleton<DropboxBackupService>();
 builder.Services.AddHostedService(provider => provider.GetRequiredService<DropboxBackupService>());
@@ -137,6 +138,7 @@ builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 
 var app = builder.Build();
 AuthEndpoints.Bootstrap(app.Services.GetRequiredService<Store>(), app.Configuration, app.Services.GetRequiredService<IPasswordHasher<Account>>());
 app.UseForwardedHeaders();
+app.UseWebSockets();
 if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))
 {
     app.UseHsts();
@@ -157,7 +159,8 @@ app.Use(async (context, next) =>
     context.Response.Headers["X-Content-Type-Options"] = "nosniff";
     context.Response.Headers["X-Frame-Options"] = "DENY";
     context.Response.Headers["Referrer-Policy"] = "no-referrer";
-    context.Response.Headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
+    var webSocketOrigin = new UriBuilder(context.Request.IsHttps ? "wss" : "ws", context.Request.Host.Host, context.Request.Host.Port ?? (context.Request.IsHttps ? 443 : 80)).Uri.GetLeftPart(UriPartial.Authority);
+    context.Response.Headers["Content-Security-Policy"] = $"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; media-src 'self' blob:; font-src 'self'; connect-src 'self' {webSocketOrigin}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
     try
     {
         await next();
@@ -194,6 +197,7 @@ app.Use(async (context, next) =>
 app.UseMiddleware<ModificationAuditMiddleware>();
 app.MapAccounts();
 app.MapBoards();
+app.MapBoardEvents();
 app.MapBackup();
 app.MapMcp("/mcp").RequireAuthorization("Mcp");
 app.MapGet("/api/health", () => TypedResults.Ok(new { status = "ok" })).AllowAnonymous();

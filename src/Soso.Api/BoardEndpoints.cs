@@ -18,16 +18,10 @@ public static class BoardEndpoints
         });
         boards.MapGet("/{id}", (string id, ClaimsPrincipal user, BoardService service) => TypedResults.Ok(service.Get(id, user)));
         boards.MapPut("/{id}", (string id, UpdateBoardRequest request, ClaimsPrincipal user, BoardService service) => TypedResults.Ok(service.Update(id, request, user)));
-        boards.MapDelete("/{id}", (string id, ClaimsPrincipal user, BoardService service, Store store) =>
+        boards.MapDelete("/{id}", (string id, ClaimsPrincipal user, BoardService service) =>
         {
-            lock (store.Gate)
-            {
-                service.RequireBoard(id, user, true);
-                store.Tickets.DeleteMany(ticket => ticket.BoardId == id);
-                store.Images.DeleteMany(image => image.BoardId == id);
-                store.Boards.Delete(id);
-                return TypedResults.NoContent();
-            }
+            service.DeleteBoard(id, user);
+            return TypedResults.NoContent();
         });
         boards.MapPost("/{id}/tickets", (string id, CreateTicketRequest request, ClaimsPrincipal user, BoardService service) =>
         {
@@ -35,18 +29,10 @@ public static class BoardEndpoints
             return TypedResults.Created($"/api/boards/{id}/tickets/{ticket.Id}", ticket);
         });
         boards.MapPut("/{id}/tickets/{ticketId}", (string id, string ticketId, UpdateTicketRequest request, ClaimsPrincipal user, BoardService service) => TypedResults.Ok(service.UpdateTicket(id, ticketId, request, user)));
-        boards.MapDelete("/{id}/tickets/{ticketId}", (string id, string ticketId, ClaimsPrincipal user, BoardService service, Store store) =>
+        boards.MapDelete("/{id}/tickets/{ticketId}", (string id, string ticketId, ClaimsPrincipal user, BoardService service) =>
         {
-            lock (store.Gate)
-            {
-                var ticket = service.RequireTicket(id, ticketId, user);
-                foreach (var image in ticket.Images.Concat(ticket.Videos))
-                {
-                    store.Images.Delete(image);
-                }
-                store.Tickets.Delete(ticketId);
-                return TypedResults.NoContent();
-            }
+            service.DeleteTicket(id, ticketId, user);
+            return TypedResults.NoContent();
         });
         boards.MapPost("/{id}/tickets/{ticketId}/comments", (string id, string ticketId, CommentRequest request, ClaimsPrincipal user, BoardService service) => TypedResults.Ok(service.Comment(id, ticketId, request.Text, user)));
         boards.MapDelete("/{id}/tickets/{ticketId}/comments/{commentId}", (string id, string ticketId, string commentId, ClaimsPrincipal user, BoardService service) => TypedResults.Ok(service.DeleteComment(id, ticketId, commentId, user)));

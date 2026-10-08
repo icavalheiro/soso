@@ -1,6 +1,75 @@
 import { test, expect } from '@playwright/test';
 import { installApiMock } from './fixtures';
 
+test( 'board updates arrive over WebSocket and reconnect reloads missed changes', async ( { page } ) =>
+{
+    const sockets: Array<{ send: ( data: string ) => void; close: () => void }> = [];
+    let reconnectSocket: ( ( socket: import( '@playwright/test' ).WebSocketRoute ) => void ) | null = null;
+    await page.routeWebSocket( '**/api/events', socket =>
+    {
+        sockets.push( socket );
+        reconnectSocket?.( socket );
+    } );
+    const state = await installApiMock( page );
+    await page.goto( '/' );
+    await expect( page.getByRole( 'button', { name: 'Open ticket: Sketch the board layout', exact: true } ) ).toBeVisible();
+
+    state.data.tickets[ 0 ].title = 'Changed through a server event';
+    await expect.poll( () => sockets.length ).toBe( 1 );
+    sockets[ 0 ].send( JSON.stringify( { boardId: 'board-fixture' } ) );
+    await expect( page.getByRole( 'button', { name: 'Open ticket: Changed through a server event', exact: true } ) ).toBeVisible();
+
+    await page.getByRole( 'button', { name: 'Open ticket: Changed through a server event', exact: true } ).click();
+    await page.getByRole( 'button', { name: 'Edit description', exact: true } ).click();
+    const editor = page.getByRole( 'textbox', { name: 'Description', exact: true } );
+    await editor.fill( 'An unsaved local draft' );
+    state.data.tickets[ 0 ].title = 'Remote title while editing';
+    state.data.tickets[ 0 ].revision++;
+    sockets[ 0 ].send( JSON.stringify( { boardId: 'board-fixture' } ) );
+    await expect( page.getByRole( 'heading', { name: 'Remote title while editing', exact: true } ) ).toBeVisible();
+    await expect( editor ).toHaveValue( 'An unsaved local draft' );
+    await expect( editor ).toBeFocused();
+    state.data.tickets[ 0 ].title = 'Recovered after reconnect';
+    state.data.tickets[ 0 ].revision++;
+    const reconnected = new Promise<void>( resolve => { reconnectSocket = () => resolve(); } );
+    sockets[ 0 ].close();
+    await reconnected;
+    await expect( page.getByRole( 'heading', { name: 'Recovered after reconnect', exact: true } ) ).toBeVisible();
+    await expect( editor ).toHaveValue( 'An unsaved local draft' );
+    await expect( editor ).toBeFocused();
+} );
+
+test( 'a remote event queued during a local save reloads other tickets and keeps a single local ticket', async ( { page } ) =>
+{
+    const sockets: Array<{ send: ( data: string ) => void }> = [];
+    await page.routeWebSocket( '**/api/events', socket => { sockets.push( socket ); } );
+    const state = await installApiMock( page );
+    let releaseLocal: ( () => void ) | null = null;
+    await page.route( `**/api/boards/${ state.data.board.id }/tickets`, async route =>
+    {
+        if ( route.request().method() !== 'POST' ) { return route.fallback(); }
+        await new Promise<void>( resolve => { releaseLocal = resolve; } );
+        const input = route.request().postDataJSON();
+        const ticket = { id: `ticket-local`, boardId: state.data.board.id, description: '', priority: 'normal', tags: [], archived: false, assigneeId: null, dueDate: null, position: 6144, revision: 0, subtasks: [], comments: [], activity: [], images: [], videos: [], ...input };
+        state.data.tickets.push( ticket );
+        await route.fulfill( { status: 201, json: ticket } );
+    } );
+    await page.goto( '/' );
+    await expect.poll( () => sockets.length ).toBe( 1 );
+    await page.getByRole( 'button', { name: 'New ticket', exact: true } ).click();
+    await page.getByRole( 'textbox', { name: 'Title' } ).fill( 'Locally created ticket' );
+    const create = page.getByRole( 'button', { name: 'Create ticket', exact: true } ).click();
+    await expect.poll( () => releaseLocal ).not.toBeNull();
+
+    state.data.tickets[ 1 ].title = 'Changed remotely during local save';
+    sockets[ 0 ].send( JSON.stringify( { boardId: state.data.board.id } ) );
+    releaseLocal!();
+    await create;
+    await expect( page.getByRole( 'button', { name: 'Open ticket: Changed remotely during local save', exact: true } ) ).toBeVisible();
+    await expect( page.getByRole( 'button', { name: 'Open ticket: Locally created ticket', exact: true } ) ).toHaveCount( 1 );
+    expect( state.data.tickets.filter( ticket => ticket.title === 'Locally created ticket' ) ).toHaveLength( 1 );
+} );
+
 test( 'login and an account without saved settings use the first supported browser language variant', async ( { page } ) =>
 {
     await page.addInitScript( () =>

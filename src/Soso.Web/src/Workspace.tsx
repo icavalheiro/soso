@@ -1,7 +1,7 @@
-import { lazy, Suspense, useEffect, useRef, useState, useDeferredValue } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, useDeferredValue } from 'react';
 import { ActionIcon, Avatar, Badge, Button, Group, Loader, Modal, PasswordInput, Popover, Select, Stack, Text, TextInput, Tooltip, useComputedColorScheme, useMantineColorScheme } from '@mantine/core';
-import { Archive, Columns3, Languages, Plus, Search, Settings, LogOut, Sun, Moon, PanelLeftClose, PanelLeftOpen, RefreshCw, Users, SlidersHorizontal, DatabaseBackup } from 'lucide-react';
-import { api, ApiError, refreshCsrf, imageUrl, ticketBody, tags } from './api';
+import { Archive, Columns3, Languages, Plus, Search, Settings, LogOut, Sun, Moon, PanelLeftClose, PanelLeftOpen, Users, SlidersHorizontal, DatabaseBackup } from 'lucide-react';
+import { api, ApiError, refreshCsrf, imageUrl, ticketBody, tags, connectBoardEvents } from './api';
 import type { Account, Board, BoardData, Ticket } from './api';
 import { reportError } from './feedback';
 import { BoardIcon } from './BoardIcon';
@@ -41,6 +41,7 @@ export default function Workspace ()
     const [ boards, setBoards ] = useState<Board[]>( [] );
     const [ activeId, setActiveId ] = useState( '' );
     const [ loadedData, setData ] = useState<BoardData | null>( null );
+    const loadedDataRef = useRef( loadedData );
     const data = loadedData?.board.id === activeId ? loadedData : null;
     const accountId = account?.id;
     const accountTheme = account?.theme;
@@ -68,8 +69,13 @@ export default function Workspace ()
     const [ title, setTitle ] = useState( '' );
     const [ busy, setBusy ] = useState( false );
     const [ boardLoading, setBoardLoading ] = useState( false );
+    const activeIdRef = useRef( activeId );
+    const requestSync = useRef<( boardId: string | null ) => void>( () => {} );
     const { setColorScheme } = useMantineColorScheme();
     const colorScheme = useComputedColorScheme( 'light', { getInitialValueInEffect: false } );
+
+    useLayoutEffect( () => { activeIdRef.current = activeId; }, [ activeId ] );
+    useLayoutEffect( () => { loadedDataRef.current = loadedData; }, [ loadedData ] );
 
     useEffect( () =>
     {
@@ -113,9 +119,14 @@ export default function Workspace ()
         {
             if ( alive )
             {
-                setBoards( result );
+                setBoards( previous => result.map( board =>
+                {
+                    const current = previous.find( item => item.id === board.id );
+                    return current && current.revision > board.revision ? current : board;
+                } ) );
                 const stored = localStorage.getItem( `soso-board-${ accountId }` );
-                setActiveId( result.some( board => board.id === stored ) ? stored! : result[ 0 ]?.id ?? '' );
+                const selectedBoard = result.find( board => board.id === stored ) ?? result[ 0 ];
+                setActiveId( current => current && result.some( board => board.id === current ) ? current : selectedBoard?.id ?? '' );
             }
         } ).catch( reportError );
         return () => { alive = false; };
@@ -154,16 +165,154 @@ export default function Workspace ()
             return;
         }
         localStorage.setItem( `soso-board-${ accountId }`, activeId );
-        let alive = true;
-        api<BoardData>( `/boards/${ activeId }` ).then( result =>
-        {
-            if ( alive )
-            {
-                setData( result );
-            }
-        } ).catch( reportError ).finally( () => { if ( alive ) { setBoardLoading( false ); } } );
-        return () => { alive = false; };
+        requestSync.current( activeId );
     }, [ activeId, accountId ] );
+
+    useEffect( () =>
+    {
+        if ( !accountId )
+        {
+            return;
+        }
+        let alive = true;
+        const pending = new Set<string>();
+        let pendingAll = false;
+        let running = false;
+        let rerun = false;
+        let retryTimer = 0;
+        let retryAttempt = 0;
+        let retryNeeded = false;
+        const scheduleRetry = () =>
+        {
+            if ( !alive || retryTimer || retryAttempt >= 5 ) { return; }
+            const delay = Math.min( 1_000 * 2 ** retryAttempt++, 15_000 );
+            retryTimer = window.setTimeout( () =>
+            {
+                retryTimer = 0;
+                pendingAll = true;
+                void drain();
+            }, delay );
+        };
+        const mergeData = ( incoming: BoardData ) =>
+        {
+            const current = loadedDataRef.current;
+            const merged = current?.board.id !== incoming.board.id ? incoming : {
+                ...incoming,
+                board: current.board.revision > incoming.board.revision ? current.board : incoming.board,
+                tickets: incoming.tickets.map( ticket =>
+                {
+                    const existing = current.tickets.find( item => item.id === ticket.id );
+                    return existing && existing.revision > ticket.revision ? existing : ticket;
+                } ),
+            };
+            loadedDataRef.current = merged;
+            setData( merged );
+            return merged;
+        };
+        const drain = async () =>
+        {
+            if ( running )
+            {
+                rerun = true;
+                return;
+            }
+            running = true;
+            try
+            {
+                do
+                {
+                    rerun = false;
+                    const refreshAll = pendingAll;
+                    const boardIds = new Set( pending );
+                    pendingAll = false;
+                    pending.clear();
+                    if ( refreshAll || boardIds.size > 0 )
+                    {
+                        try
+                        {
+                            const result = await api<Board[]>( '/boards' );
+                            if ( alive )
+                            {
+                                setBoards( previous => result.map( board =>
+                                {
+                                    const existing = previous.find( item => item.id === board.id );
+                                    return existing && existing.revision > board.revision ? existing : board;
+                                } ) );
+                            }
+                        }
+                        catch ( error )
+                        {
+                            retryNeeded = true;
+                            if ( alive ) { reportError( error ); }
+                        }
+                    }
+                    const activeBoardId = activeIdRef.current;
+                    const shouldReadActive = activeBoardId && ( refreshAll || boardIds.has( activeBoardId ) );
+                    if ( alive && shouldReadActive )
+                    {
+                        try
+                        {
+                            const result = await api<BoardData>( `/boards/${ activeBoardId }` );
+                            if ( alive && activeIdRef.current === activeBoardId )
+                            {
+                                const merged = mergeData( result );
+                                setSelected( previous => previous?.boardId === activeBoardId ? merged.tickets.find( item => item.id === previous.id ) ?? null : previous );
+                                setBoardLoading( false );
+                            }
+                        }
+                        catch ( error )
+                        {
+                            if ( alive && error instanceof ApiError && error.status === 404 && activeIdRef.current === activeBoardId )
+                            {
+                                setBoards( previous => previous.filter( board => board.id !== activeBoardId ) );
+                                loadedDataRef.current = loadedDataRef.current?.board.id === activeBoardId ? null : loadedDataRef.current;
+                                setData( previous => previous?.board.id === activeBoardId ? null : previous );
+                                setActiveId( previous => previous === activeBoardId ? '' : previous );
+                                setSelected( previous => previous?.boardId === activeBoardId ? null : previous );
+                            }
+                            else if ( alive )
+                            {
+                                retryNeeded = true;
+                                reportError( error );
+                            }
+                        }
+                    }
+                    if ( retryNeeded )
+                    {
+                        retryNeeded = false;
+                        scheduleRetry();
+                    }
+                    else if ( refreshAll || shouldReadActive )
+                    {
+                        retryAttempt = 0;
+                        window.clearTimeout( retryTimer );
+                        retryTimer = 0;
+                    }
+                }
+                while ( alive && ( pendingAll || pending.size > 0 || rerun ) );
+            }
+            finally
+            {
+                running = false;
+                if ( alive && ( pendingAll || pending.size > 0 || rerun ) ) { void drain(); }
+            }
+        };
+        requestSync.current = boardId =>
+        {
+            if ( boardId === null ) { pendingAll = true; }
+            else { pending.add( boardId ); }
+            void drain();
+        };
+        const stop = connectBoardEvents( event =>
+        {
+            requestSync.current( event.boardId );
+        }, () =>
+        {
+            requestSync.current( null );
+        } );
+        requestSync.current( null );
+        return () => { alive = false; window.clearTimeout( retryTimer ); requestSync.current = () => {}; stop(); };
+    }, [ accountId ] );
 
     function toggleSidebar ()
     {
@@ -174,6 +323,7 @@ export default function Workspace ()
 
     function selectBoard ( id: string )
     {
+        activeIdRef.current = id;
         setActiveId( id ); setSelected( null ); setSearch( '' ); setAssignee( 'all' ); setTagFilter( [] ); setArchive( false );
         if ( window.innerWidth < 768 )
         {
@@ -182,38 +332,25 @@ export default function Workspace ()
         }
     }
 
-    async function reload ()
-    {
-        if ( !activeId )
-        {
-            return;
-        }
-        try
-        {
-            setBoardLoading( true );
-            setData( await api<BoardData>( `/boards/${ activeId }` ) );
-        }
-        catch ( error )
-        {
-            reportError( error );
-        }
-        finally
-        {
-            setBoardLoading( false );
-        }
-    }
-
     function changed ( ticket: Ticket )
     {
-        setData( previous => previous ? { ...previous, tickets: previous.tickets.map( item => item.id === ticket.id ? ticket : item ) } : previous );
-        if ( !ticket.archived && data?.board.id === ticket.boardId && !data.board.columns.some( column => column.id === ticket.columnId ) )
+        if ( activeIdRef.current !== ticket.boardId )
         {
-            void api<BoardData>( `/boards/${ ticket.boardId }` ).then( result =>
-            {
-                setData( previous => previous?.board.id === result.board.id ? { ...previous, board: result.board } : previous );
-                setBoards( previous => previous.map( board => board.id === result.board.id ? result.board : board ) );
-            } ).catch( reportError );
+            requestSync.current( ticket.boardId );
+            return;
         }
+        setSelected( previous => previous?.boardId === ticket.boardId && previous.id === ticket.id && previous.revision <= ticket.revision ? ticket : previous );
+        setData( previous =>
+        {
+            if ( !previous || previous.board.id !== ticket.boardId ) { return previous; }
+            const tickets = previous.tickets.some( item => item.id === ticket.id )
+                ? previous.tickets.map( item => item.id === ticket.id && item.revision > ticket.revision ? item : item.id === ticket.id ? ticket : item )
+                : [ ...previous.tickets, ticket ];
+            const next = { ...previous, tickets };
+            loadedDataRef.current = next;
+            return next;
+        } );
+        requestSync.current( ticket.boardId );
     }
 
     async function move ( ticket: Ticket, columnId: string, position: number )
@@ -225,18 +362,35 @@ export default function Workspace ()
         catch ( error )
         {
             reportError( error );
-            await reload();
+            requestSync.current( ticket.boardId );
         }
     }
 
     async function createTicket ()
     {
+        const boardId = activeIdRef.current;
         try
         {
             setBusy( true );
-            const ticket = await api<Ticket>( `/boards/${ activeId }/tickets`, 'POST', { title, columnId: newColumn, assigneeId: account?.id } );
-            setData( previous => previous ? { ...previous, tickets: [ ...previous.tickets, ticket ] } : previous );
-            setTitle( '' ); setNewColumn( null ); setCreatedTicketId( ticket.id ); setSelected( ticket );
+            const ticket = await api<Ticket>( `/boards/${ boardId }/tickets`, 'POST', { title, columnId: newColumn, assigneeId: account?.id } );
+            if ( activeIdRef.current !== boardId )
+            {
+                requestSync.current( boardId );
+                return;
+            }
+            setData( previous =>
+            {
+                if ( !previous ) { return previous; }
+                const tickets = previous.tickets.some( item => item.id === ticket.id )
+                    ? previous.tickets.map( item => item.id === ticket.id && item.revision > ticket.revision ? item : item.id === ticket.id ? ticket : item )
+                    : [ ...previous.tickets, ticket ];
+                const next = { ...previous, tickets };
+                loadedDataRef.current = next;
+                return next;
+            } );
+            requestSync.current( boardId );
+            setTitle( '' ); setNewColumn( null ); setCreatedTicketId( ticket.id );
+            setSelected( previous => previous?.boardId === ticket.boardId && previous.id === ticket.id && previous.revision > ticket.revision ? previous : ticket );
         }
         catch ( error )
         {
@@ -313,7 +467,6 @@ export default function Workspace ()
                 <Group className="board-actions" gap={ 6 }>
                     <Avatar.Group className="board-avatars">{ data.members.slice( 0, 4 ).map( member => <Tooltip key={ member.id } label={ member.name }><Avatar size={ 24 } radius="xl" src={ imageUrl( member.avatarId ) }>{ member.name.slice( 0, 1 ) }</Avatar></Tooltip> ) }</Avatar.Group>
                     { canManage && <IconButton label={ t( 'Board settings' ) } onClick={ () => { setBoardModal( 'edit' ); } }><Settings size={ 16 } /></IconButton> }
-                    <IconButton label={ t( 'Refresh board' ) } onClick={ () => { void reload(); } }>{ boardLoading ? <Loader size={ 14 } /> : <RefreshCw size={ 15 } /> }</IconButton>
                     <Button size="xs" variant={ activeFilters > 0 ? 'light' : 'default' } leftSection={ <SlidersHorizontal size={ 14 } /> } aria-haspopup="dialog" onClick={ () => { setFiltersOpen( true ); } }>{ t( 'Filters' ) }{ activeFilters > 0 ? ` (${ activeFilters })` : '' }</Button>
                     <Button size="xs" variant="default" leftSection={ <Archive size={ 14 } /> } onClick={ () => { setArchive( true ); } }>{ t( 'Archive' ) }</Button>
                     <Button size="xs" leftSection={ <Plus size={ 14 } /> } onClick={ () => { setNewColumn( data.board.columns[ 0 ].id ); } }>{ t( 'New ticket' ) }</Button>
@@ -330,8 +483,8 @@ export default function Workspace ()
             </Stack>
         </Modal>
         <Suspense fallback={ <Loader className="modal-loading" /> }>
-            { selected && data && <TicketModal key={ selected.id } ticket={ selected } data={ data } account={ account } focusDescription={ createdTicketId === selected.id } onClose={ () => { setSelected( null ); setCreatedTicketId( null ); } } onFocusSearch={ () => { searchInput.current?.focus(); } } onChange={ changed } onDelete={ id => { setData( previous => previous ? { ...previous, tickets: previous.tickets.filter( ticket => ticket.id !== id ) } : previous ); setSelected( null ); setCreatedTicketId( null ); } } /> }
-            { boardModal && <BoardModal board={ boardModal === 'edit' ? data?.board : undefined } onClose={ () => { setBoardModal( null ); } } onSave={ board => { setBoards( previous => [ ...previous.filter( item => item.id !== board.id ), board ] ); selectBoard( board.id ); setBoardModal( null ); void api<BoardData>( `/boards/${ board.id }` ).then( setData ).catch( reportError ); } } onDelete={ id => { const remaining = boards.filter( board => board.id !== id ); setBoards( remaining ); selectBoard( remaining[ 0 ]?.id ?? '' ); setData( null ); setBoardModal( null ); } } /> }
+            { selected && data && <TicketModal key={ selected.id } ticket={ selected } data={ data } account={ account } focusDescription={ createdTicketId === selected.id } onClose={ () => { setSelected( null ); setCreatedTicketId( null ); } } onFocusSearch={ () => { searchInput.current?.focus(); } } onChange={ changed } onDelete={ id => { setData( previous => { const next = previous?.board.id === selected.boardId ? { ...previous, tickets: previous.tickets.filter( ticket => ticket.id !== id ) } : previous; loadedDataRef.current = next; return next; } ); requestSync.current( selected.boardId ); setSelected( null ); setCreatedTicketId( null ); } } /> }
+            { boardModal && <BoardModal board={ boardModal === 'edit' ? data?.board : undefined } onClose={ () => { setBoardModal( null ); } } onSave={ board => { setBoards( previous => [ ...previous.filter( item => item.id !== board.id ), board ] ); selectBoard( board.id ); setBoardModal( null ); requestSync.current( board.id ); } } onDelete={ id => { const remaining = boards.filter( board => board.id !== id ); setBoards( remaining ); selectBoard( remaining[ 0 ]?.id ?? '' ); setData( null ); loadedDataRef.current = null; setBoardModal( null ); requestSync.current( null ); } } /> }
             { profile && <ProfileModal account={ account } onChange={ setAccount } onClose={ () => { setProfile( false ); } } /> }
             { admin && <AdminModal onClose={ () => { setAdmin( false ); } } /> }
             { backup && <BackupModal result={ backupResult } onClose={ () => { setBackup( false ); setBackupResult( null ); } } /> }

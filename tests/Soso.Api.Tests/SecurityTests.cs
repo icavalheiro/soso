@@ -3,10 +3,14 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Security.Claims;
+using System.Net.WebSockets;
+using System.Collections.Concurrent;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 using Soso.Api;
 using Xunit;
 using ImageMagick;
@@ -40,6 +44,7 @@ public sealed class AppFactory : WebApplicationFactory<Program>
 public sealed class SecurityTests
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly ConcurrentDictionary<HttpClient, string> SessionCookies = new();
 
     private static async Task Csrf(HttpClient client)
     {
@@ -54,6 +59,7 @@ public sealed class SecurityTests
         var response = await client.PostAsJsonAsync("/api/auth/login", new { email, password = AppFactory.Password });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var cookie = response.Headers.GetValues("Set-Cookie").First(value => value.StartsWith("__Host-soso="));
+        SessionCookies[client] = cookie.Split(';', 2)[0];
         Assert.Contains("secure", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("httponly", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("samesite=strict", cookie, StringComparison.OrdinalIgnoreCase);
@@ -253,6 +259,116 @@ public sealed class SecurityTests
             Assert.Equal(BoardService.UserId(user), assigned.AssigneeId);
             Assert.Equal(400, Assert.Throws<ApiException>(() => service.CreateTicket(board.Id, new("Invalid assignee", column, AssigneeId: "outsider"), user)).Status);
         });
+    }
+
+    [Fact]
+    public async Task BoardEventsRequireAuthenticatedSameOriginWebSocketHandshake()
+    {
+        await using var factory = new AppFactory();
+        using var anonymous = factory.Browser();
+        using var unauthenticated = new HttpRequestMessage(HttpMethod.Get, "/api/events");
+        unauthenticated.Headers.Add("Origin", "https://localhost");
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.SendAsync(unauthenticated)).StatusCode);
+
+        using var client = factory.Browser();
+        await Login(client);
+        using var crossOrigin = new HttpRequestMessage(HttpMethod.Get, "/api/events");
+        crossOrigin.Headers.Add("Origin", "https://attacker.example");
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.SendAsync(crossOrigin)).StatusCode);
+
+        using var socket = await OpenWebSocket(factory, client);
+        using var closeTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "idle close", closeTimeout.Token);
+    }
+
+    [Fact]
+    public async Task BoardEventsArePublishedOnlyToUsersWithBoardAccessAfterPersistence()
+    {
+        await using var factory = new AppFactory();
+        using var admin = factory.Browser();
+        await Login(admin);
+        var member = await CreateUser(admin, "events-member@example.test");
+        using var memberClient = factory.Browser();
+        await Login(memberClient, member.Email);
+        using var outsider = factory.Browser();
+        await CreateUser(admin, "events-outsider@example.test");
+        await Login(outsider, "events-outsider@example.test");
+
+        var board = await CreateBoard(admin, "Realtime access");
+        using var ownerSocket = await OpenWebSocket(factory, admin);
+        using var memberSocket = await OpenWebSocket(factory, memberClient);
+        using var outsiderSocket = await OpenWebSocket(factory, outsider);
+
+        var ticket = (await (await admin.PostAsJsonAsync($"/api/boards/{board.Id}/tickets", new { title = "Visible after save", columnId = board.Columns[0].Id })).Content.ReadFromJsonAsync<Ticket>())!;
+        Assert.Equal(board.Id, (await ReceiveEvent(ownerSocket)).BoardId);
+        Assert.False(await HasEvent(outsiderSocket));
+        Assert.False(await HasEvent(memberSocket));
+        var boardUpdate = new UpdateBoardRequest(board.Name, board.Description, [member.Id], board.Columns.Select(column => new ColumnRequest(column.Id, column.Name, column.IsDone)).ToArray(), board.Revision);
+        Assert.Equal(HttpStatusCode.OK, (await admin.PutAsJsonAsync($"/api/boards/{board.Id}", boardUpdate)).StatusCode);
+        Assert.Equal(board.Id, (await ReceiveEvent(ownerSocket)).BoardId);
+        Assert.Equal(board.Id, (await ReceiveEvent(memberSocket)).BoardId);
+        Assert.False(await HasEvent(outsiderSocket));
+
+        var update = await admin.PutAsJsonAsync($"/api/boards/{board.Id}/tickets/{ticket.Id}", Edit(ticket) with { Title = "Persisted edit" });
+        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+        Assert.Equal(board.Id, (await ReceiveEvent(ownerSocket)).BoardId);
+        Assert.Equal(board.Id, (await ReceiveEvent(memberSocket)).BoardId);
+        Assert.False(await HasEvent(outsiderSocket));
+
+        var token = await admin.PostAsJsonAsync("/api/auth/tokens", new { name = "WebSocket event test" });
+        var tokenData = await token.Content.ReadFromJsonAsync<JsonElement>();
+        var secret = tokenData.GetProperty("token").GetString()!;
+        var tokenId = AuthEndpoints.HashToken(secret);
+        Assert.Equal(HttpStatusCode.OK, (await admin.PutAsJsonAsync($"/api/auth/tokens/{tokenId}/boards", new { boardIds = new[] { board.Id } })).StatusCode);
+        using var mcp = factory.Browser();
+        mcp.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secret);
+        mcp.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+        mcp.DefaultRequestHeaders.Accept.ParseAdd("text/event-stream");
+        var mcpCreate = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 1, method = "tools/call", @params = new { name = "create_ticket", arguments = new { boardId = board.Id, columnId = board.Columns[0].Id, title = "Created via MCP", description = "Specification", tags = new[] { "feature" } } } });
+        Assert.Equal(HttpStatusCode.OK, mcpCreate.StatusCode);
+        Assert.Equal(board.Id, (await ReceiveEvent(ownerSocket)).BoardId);
+
+        using var invalidBatch = await mcp.PostAsJsonAsync("/mcp", new { jsonrpc = "2.0", id = 2, method = "tools/call", @params = new { name = "create_tickets", arguments = new { boardId = board.Id, tickets = new[] { new McpCreateTicketRequest("Will roll back", board.Columns[0].Id, "Specification", ["test"]), new McpCreateTicketRequest("Invalid", "missing", "Specification", ["test"]) } } } });
+        Assert.Contains("\"isError\":true", await invalidBatch.Content.ReadAsStringAsync());
+        Assert.False(await HasEvent(ownerSocket));
+    }
+
+    private static async Task<WebSocket> OpenWebSocket(AppFactory factory, HttpClient client)
+    {
+        var cookie = SessionCookies[client];
+        var socket = factory.Server.CreateWebSocketClient();
+        socket.ConfigureRequest = request =>
+        {
+            request.Headers.Append("Cookie", cookie);
+            request.Headers.Append("Origin", "https://localhost");
+        };
+        return await socket.ConnectAsync(new Uri("wss://localhost/api/events"), CancellationToken.None);
+    }
+
+    private static async Task<BoardChangedEvent> ReceiveEvent(WebSocket socket)
+    {
+        var buffer = new byte[1024];
+        using var message = new MemoryStream();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        WebSocketReceiveResult result;
+        do
+        {
+            result = await socket.ReceiveAsync(buffer, timeout.Token);
+            message.Write(buffer, 0, result.Count);
+        } while (!result.EndOfMessage);
+        return JsonSerializer.Deserialize<BoardChangedEvent>(message.ToArray(), JsonOptions)!;
+    }
+
+    private static async Task<bool> HasEvent(WebSocket socket)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+        var buffer = new byte[1024];
+        try
+        {
+            await socket.ReceiveAsync(buffer, timeout.Token);
+            return true;
+        }
+        catch (OperationCanceledException) { return false; }
     }
 
     [Fact]
