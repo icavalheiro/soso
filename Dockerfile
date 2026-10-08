@@ -3,7 +3,7 @@ WORKDIR /web
 COPY src/Soso.Web/package*.json ./
 RUN npm ci
 COPY src/Soso.Web/ ./
-COPY logo.jpg ./public/logo.jpg
+COPY logo.png ./public/logo.png
 RUN npm run build
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build

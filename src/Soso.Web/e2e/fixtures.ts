@@ -152,7 +152,7 @@ export async function installApiMock ( page: Page, authenticated = true )
         }
         if ( path.startsWith( '/api/videos/' ) && path.endsWith( '/thumbnail' ) )
         {
-            return route.fulfill( { path: 'public/logo.jpg', contentType: 'image/jpeg' } );
+            return route.fulfill( { path: 'public/logo.png', contentType: 'image/jpeg' } );
         }
         if ( path.startsWith( '/api/videos/' ) )
         {
@@ -160,7 +160,7 @@ export async function installApiMock ( page: Page, authenticated = true )
         }
         if ( path.startsWith( '/api/images/' ) )
         {
-            return route.fulfill( { path: 'public/logo.jpg', contentType: 'image/jpeg' } );
+            return route.fulfill( { path: 'public/logo.png', contentType: 'image/jpeg' } );
         }
         const ticket = state.data.tickets.find( ticket => path.includes( `/tickets/${ ticket.id }` ) );
         if ( ticket && method === 'PUT' )

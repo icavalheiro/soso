@@ -1,7 +1,7 @@
 # Sosô
 
 <p align="center">
-  <img src="logo.jpg" alt="Sosô logo" width="240" />
+  <img src="logo.png" alt="Sosô logo" width="240" />
 </p>
 
 <p align="center">

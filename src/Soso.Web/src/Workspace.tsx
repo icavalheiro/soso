@@ -60,7 +60,7 @@ export default function Workspace ()
     const [ selected, setSelected ] = useState<Ticket | null>( null );
     const [ boardModal, setBoardModal ] = useState<'create' | 'edit' | null>( null );
     const [ profile, setProfile ] = useState( false );
-const [ admin, setAdmin ] = useState( false );
+    const [ admin, setAdmin ] = useState( false );
     const [ backup, setBackup ] = useState( () => new URLSearchParams( window.location.search ).has( 'dropbox' ) );
     const [ backupResult, setBackupResult ] = useState<string | null>( () => new URLSearchParams( window.location.search ).get( 'dropbox' ) );
     const [ newColumn, setNewColumn ] = useState<string | null>( null );
@@ -280,7 +280,7 @@ const [ admin, setAdmin ] = useState( false );
 
     return <div className={ `app-shell ${ collapsed ? 'is-collapsed' : '' }` }>
         <aside className="sidebar" id="workspace-sidebar" aria-label={ t( 'Workspace navigation' ) }>
-            <div className="brand"><img src="/logo.jpg" alt="Sosô" /><strong>Sosô<span>{ t( 'Organizing your life :D' ) }</span></strong></div>
+            <div className="brand"><img src="/logo.png" alt="Sosô" /><strong>Sosô<span>{ t( 'Organizing your life :D' ) }</span></strong></div>
             <div className="sidebar-heading"><span>{ t( 'BOARDS' ) }</span><IconButton label={ t( 'Create board' ) } onClick={ () => { setBoardModal( 'create' ); } }><Plus size={ 17 } /></IconButton></div>
             <nav className="board-nav">{ boards.map( board => <button key={ board.id } className={ `board-link ${ board.id === activeId ? 'active' : '' }` } aria-current={ board.id === activeId ? 'page' : undefined } onClick={ () => { selectBoard( board.id ); } }><BoardIcon icon={ board.icon } color={ board.color } /><span>{ board.name }</span></button> ) }</nav>
             <div className="sidebar-bottom">
@@ -358,5 +358,5 @@ function Login ( { onLogin, themeButton }: { onLogin: ( account: Account ) => vo
             setBusy( false );
         }
     }
-    return <main className="login-page"><div className="login-brand"><img src="/logo.jpg" alt="Sosô" /><h1>Sosô</h1>{ themeButton }</div><form className="login-form" onSubmit={ event => { void submit( event ); } }><h2>{ t( 'Sign in' ) }</h2><Stack gap="md"><TextInput label={ t( 'Email' ) } type="email" autoComplete="username" required maxLength={ 254 } value={ email } onChange={ event => { setEmail( event.currentTarget.value ); } } /><PasswordInput label={ t( 'Password' ) } autoComplete="current-password" required maxLength={ 128 } value={ password } onChange={ event => { setPassword( event.currentTarget.value ); } } />{ error && <Text role="alert" c="red" size="sm">{ error }</Text> }<Button type="submit" loading={ busy }>{ t( 'Sign in' ) }</Button></Stack></form></main>;
+    return <main className="login-page"><div className="login-brand"><img src="/logo.png" alt="Sosô" /><h1>Sosô</h1>{ themeButton }</div><form className="login-form" onSubmit={ event => { void submit( event ); } }><h2>{ t( 'Sign in' ) }</h2><Stack gap="md"><TextInput label={ t( 'Email' ) } type="email" autoComplete="username" required maxLength={ 254 } value={ email } onChange={ event => { setEmail( event.currentTarget.value ); } } /><PasswordInput label={ t( 'Password' ) } autoComplete="current-password" required maxLength={ 128 } value={ password } onChange={ event => { setPassword( event.currentTarget.value ); } } />{ error && <Text role="alert" c="red" size="sm">{ error }</Text> }<Button type="submit" loading={ busy }>{ t( 'Sign in' ) }</Button></Stack></form></main>;
 }
