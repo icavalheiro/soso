@@ -438,6 +438,13 @@ button:focus-visible {
     font-size: 9px;
     color: var(--muted);
 }
+.ticket-id {
+    font-size: 9px;
+    color: var(--muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
 .overdue {
     color: #e16872;
 }
@@ -692,6 +699,19 @@ button:focus-visible {
 .modal-ticket-label {
     font-size: 10px;
     color: var(--muted);
+}
+.modal-ticket-id {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+}
+.modal-ticket-id:hover {
+    color: var(--text);
+    text-decoration: underline;
 }
 .ticket-fieldset {
     border: 0;
