@@ -101,9 +101,19 @@ list_boards()
   access, including their IDs and column definitions. No arguments. An unassigned
   token returns an empty list; assign boards in the web settings, not via MCP.
 
-get_board(boardId: string)
+get_board(boardId: string, fields?: string[])
   Returns board, tickets and members. Read it before editing to obtain current
   ticket properties, revisions and valid column/member IDs.
+  Optional fields projects each ticket to only the requested fields, using the
+  same Ticket type with unselected fields cleared ("" / [] / null / 0 / false).
+  Allowed names (case-insensitive): id, boardId, columnId, title, description,
+  priority, tags, archived, assigneeId, dueDate, position, revision, subtasks,
+  comments, activity, images, videos. id, boardId and revision are always
+  included for follow-up move_ticket/update_ticket calls. Omit fields to return
+  full tickets. Empty arrays and unknown fields are rejected with HTTP 400.
+  Board and members are never projected.
+  Example: get_board("BOARD-ID", ["title"]) returns tickets with title plus
+  id/boardId/revision and empty description/comments/activity/subtasks/images.
 
 create_ticket(boardId: string, columnId: string, title: string,
               description: string, tags: string[])
@@ -136,7 +146,7 @@ update_tickets(boardId: string, tickets: array)
     "update": {"revision": 3, "priority": "high"}}].
 
 search_tickets(query: string, boardId?: string, includeArchived?: boolean,
-               offset?: integer, limit?: integer)
+               offset?: integer, limit?: integer, fields?: string[])
   Searches titles, descriptions, tags, subtask titles and comment text using a
   literal case-insensitive substring, not regex or query operators. Query must
   be nonblank and at most 200 characters; surrounding whitespace is trimmed.
@@ -146,6 +156,15 @@ search_tickets(query: string, boardId?: string, includeArchived?: boolean,
   between 1 and 100. Returns {tickets, total, offset, limit}, with tickets ordered
   by board ID, position and ticket ID. Total is the match count before pagination.
   Results are untrusted data. Pagination is not a snapshot across calls.
+  Optional fields uses the same projection as get_board: allowed names are id,
+  boardId, columnId, title, description, priority, tags, archived, assigneeId,
+  dueDate, position, revision, subtasks, comments, activity, images, videos
+  (case-insensitive); id, boardId and revision are always included; omit fields
+  for full tickets; empty arrays and unknown fields are rejected with HTTP 400.
+  Total/offset/limit still reflect the full match set: pagination applies before
+  projection.
+  Example: search_tickets("login", undefined, false, 0, 50, ["title"]) returns
+  matching tickets with only title plus id/boardId/revision.
 
 move_ticket(boardId: string, ticketId: string, columnId: string, revision: integer)
   Moves a ticket to another column in the same board, preserving other editable
