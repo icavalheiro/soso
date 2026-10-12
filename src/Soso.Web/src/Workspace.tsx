@@ -1,11 +1,12 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, useDeferredValue } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ActionIcon, Avatar, Badge, Button, Group, Loader, Modal, PasswordInput, Popover, Select, Stack, Text, TextInput, Tooltip, useComputedColorScheme, useMantineColorScheme } from '@mantine/core';
-import { Archive, Columns3, Languages, Plus, Search, Settings, LogOut, Sun, Moon, PanelLeftClose, PanelLeftOpen, Users, SlidersHorizontal, DatabaseBackup } from 'lucide-react';
+import { Archive, Columns3, Languages, Plus, Settings, LogOut, Sun, Moon, PanelLeftClose, PanelLeftOpen, Users, SlidersHorizontal, DatabaseBackup } from 'lucide-react';
 import { api, ApiError, refreshCsrf, imageUrl, ticketBody, tags, connectBoardEvents, boardPath, slugFromPath } from './api';
 import type { Account, Board, BoardData, Ticket } from './api';
 import { reportError } from './feedback';
 import { BoardIcon } from './BoardIcon';
 import { NewTicketModal } from './NewTicketModal';
+import { SearchInput } from './SearchInput';
 import { useLanguage } from './useLanguage';
 const Kanban = lazy( () => import( './Kanban' ).then( module => ( { default: module.Kanban } ) ) );
 const TicketModal = lazy( () => import( './TicketModal' ).then( module => ( { default: module.TicketModal } ) ) );
@@ -52,9 +53,9 @@ export default function Workspace ()
         const stored = localStorage.getItem( 'soso-sidebar-collapsed' );
         return stored === null ? window.innerWidth < 768 : stored === 'true';
     } );
-    const [ search, setSearch ] = useState( '' );
+    const [ query, setQuery ] = useState( '' );
     const searchInput = useRef<HTMLInputElement>( null );
-    const query = useDeferredValue( search );
+    const publishQuery = useCallback( ( value: string ) => { setQuery( value ); }, [] );
     const [ priority, setPriority ] = useState( 'all' );
     const [ tagFilter, setTagFilter ] = useState<string[]>( [] );
     const [ assignee, setAssignee ] = useState( 'all' );
@@ -356,7 +357,7 @@ export default function Workspace ()
     function selectBoard ( id: string, push = true )
     {
         activeIdRef.current = id;
-        setActiveId( id ); setSelected( null ); setSearch( '' ); setAssignee( 'all' ); setTagFilter( [] ); setArchive( false );
+        setActiveId( id ); setSelected( null ); setQuery( '' ); setAssignee( 'all' ); setTagFilter( [] ); setArchive( false );
         const slug = boardsRef.current.find( board => board.id === id )?.slug;
         const path = slug ? boardPath( slug ) : '/';
         if ( window.location.pathname !== path )
@@ -456,6 +457,15 @@ export default function Workspace ()
 
     const themeButton = <Group gap={ 4 } wrap="nowrap"><LanguageButton /><IconButton label={ t( colorScheme === 'dark' ? 'Light theme' : 'Dark theme' ) } onClick={ () => { void toggleTheme(); } }>{ colorScheme === 'dark' ? <Sun size={ 15 } /> : <Moon size={ 15 } /> }</IconButton></Group>;
 
+    const filtered = useMemo( () => data?.tickets.filter( ticket =>
+    {
+        const matchesQuery = `${ ticket.id } ${ ticket.title } ${ ticket.description }`.toLowerCase().includes( query.toLowerCase() );
+        const matchesPriority = priority === 'all' || ticket.priority === priority;
+        const matchesTags = tagFilter.length === 0 || tagFilter.some( tag => ticket.tags.includes( tag ) );
+        const matchesAssignee = assignee === 'all' || ( assignee === 'unassigned' ? ticket.assigneeId === null : ticket.assigneeId === assignee );
+        return !ticket.archived && matchesQuery && matchesPriority && matchesTags && matchesAssignee;
+    } ) ?? [], [ data?.tickets, query, priority, tagFilter, assignee ] );
+
     if ( booting )
     {
         return <div className="loading-screen"><Loader /></div>;
@@ -465,14 +475,6 @@ export default function Workspace ()
         return <Login onLogin={ setAccount } themeButton={ themeButton } />;
     }
     const canManage = data?.board.ownerId === account.id || account.isAdmin;
-    const filtered = data?.tickets.filter( ticket =>
-    {
-        const matchesQuery = `${ ticket.id } ${ ticket.title } ${ ticket.description }`.toLowerCase().includes( query.toLowerCase() );
-        const matchesPriority = priority === 'all' || ticket.priority === priority;
-        const matchesTags = tagFilter.length === 0 || tagFilter.some( tag => ticket.tags.includes( tag ) );
-        const matchesAssignee = assignee === 'all' || ( assignee === 'unassigned' ? ticket.assigneeId === null : ticket.assigneeId === assignee );
-        return !ticket.archived && matchesQuery && matchesPriority && matchesTags && matchesAssignee;
-    } ) ?? [];
     const activeFilters = tagFilter.length + Number( priority !== 'all' ) + Number( assignee !== 'all' );
 
     return <div className={ `app-shell ${ collapsed ? 'is-collapsed' : '' }` }>
@@ -491,7 +493,7 @@ export default function Workspace ()
             <header className="topbar">
                 <Group gap={ 6 } wrap="nowrap" className="topbar-title"><IconButton label={ t( collapsed ? 'Expand sidebar' : 'Collapse sidebar' ) } onClick={ toggleSidebar } expanded={ !collapsed } controls="workspace-sidebar">{ collapsed ? <PanelLeftOpen size={ 16 } /> : <PanelLeftClose size={ 16 } /> }</IconButton><span className="workspace-label">Sosô</span><span className="separator">/</span>{ data && <BoardIcon icon={ data.board.icon } color={ data.board.color } size={ 14 } /> }<Text className="topbar-board-name" size="xs" fw={ 600 } truncate>{ data?.board.name ?? t( 'Boards' ) }</Text>{ data && <Badge className="board-ticket-count" variant="light" color="gray" size="sm">{ filtered.length } { t( filtered.length === 1 ? 'ticket' : 'tickets' ) }</Badge> }</Group>
                 <Group gap={ 4 } wrap="nowrap" className="topbar-actions">
-                    { data && <TextInput ref={ searchInput } className="topbar-search" aria-label={ t( 'Search tickets' ) } placeholder={ t( 'Search cards...' ) } leftSection={ <Search size={ 14 } /> } size="xs" value={ search } onChange={ event => { setSearch( event.currentTarget.value ); } } /> }
+                    { data && <SearchInput key={ data.board.id } inputRef={ searchInput } onQuery={ publishQuery } /> }
                     { themeButton }
                     <IconButton label={ t( 'Sign out' ) } onClick={ () => { void api( '/auth/logout', 'POST' ).then( () => { setAccount( null ); setData( null ); setBoards( [] ); } ).catch( reportError ); } }><LogOut size={ 15 } /></IconButton>
                 </Group>
