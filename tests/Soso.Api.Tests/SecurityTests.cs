@@ -706,6 +706,44 @@ public sealed class SecurityTests
     }
 
     [Fact]
+    public async Task SpaFallbackServesHtmlOnlyForSafeNavigations()
+    {
+        using var factory = new AppFactory();
+        var environment = factory.Services.GetRequiredService<IWebHostEnvironment>();
+        var webRoot = environment.WebRootPath ?? Path.Combine(environment.ContentRootPath, "wwwroot");
+        Directory.CreateDirectory(webRoot);
+        var index = Path.Combine(webRoot, "index.html");
+        var original = File.Exists(index) ? await File.ReadAllTextAsync(index) : null;
+        const string marker = "<!doctype html><html data-testid=\"spa-fallback\"></html>";
+        try
+        {
+            await File.WriteAllTextAsync(index, marker);
+            using var client = factory.Browser();
+            using var navigation = await client.GetAsync("/boards/missing-slug");
+            Assert.Equal(HttpStatusCode.OK, navigation.StatusCode);
+            Assert.StartsWith("text/html", navigation.Content.Headers.ContentType?.ToString());
+            Assert.Contains(marker, await navigation.Content.ReadAsStringAsync());
+            using var post = await client.PostAsJsonAsync("/boards/missing-slug", new { });
+            Assert.Equal(HttpStatusCode.NotFound, post.StatusCode);
+            Assert.DoesNotContain("<", await post.Content.ReadAsStringAsync());
+            using var postRoot = await client.PostAsJsonAsync("/", new { });
+            Assert.Equal(HttpStatusCode.NotFound, postRoot.StatusCode);
+            Assert.DoesNotContain("<", await postRoot.Content.ReadAsStringAsync());
+        }
+        finally
+        {
+            if (original is null)
+            {
+                File.Delete(index);
+            }
+            else
+            {
+                await File.WriteAllTextAsync(index, original);
+            }
+        }
+    }
+
+    [Fact]
     public async Task BoardsTicketsImagesTagsAndArchiveRespectMembershipAndRevisions()
     {
         using var factory = new AppFactory();

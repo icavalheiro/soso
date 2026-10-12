@@ -205,8 +205,9 @@ app.MapGet("/api/health", () => TypedResults.Ok(new { status = "ok" })).AllowAno
 app.MapFallback(async context =>
 {
     var isBackend = context.Request.Path.StartsWithSegments("/api") || context.Request.Path.StartsWithSegments("/mcp");
+    var isNavigation = HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method);
     var file = Path.Combine(app.Environment.WebRootPath ?? "wwwroot", "index.html");
-    if (isBackend || !File.Exists(file))
+    if (isBackend || !isNavigation || !File.Exists(file))
     {
         context.Response.StatusCode = 404;
         return;
