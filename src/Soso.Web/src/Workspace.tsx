@@ -5,6 +5,7 @@ import { api, ApiError, refreshCsrf, imageUrl, ticketBody, tags, connectBoardEve
 import type { Account, Board, BoardData, Ticket } from './api';
 import { reportError } from './feedback';
 import { BoardIcon } from './BoardIcon';
+import { NewTicketModal } from './NewTicketModal';
 import { useLanguage } from './useLanguage';
 const Kanban = lazy( () => import( './Kanban' ).then( module => ( { default: module.Kanban } ) ) );
 const TicketModal = lazy( () => import( './TicketModal' ).then( module => ( { default: module.TicketModal } ) ) );
@@ -67,8 +68,6 @@ export default function Workspace ()
     const [ backup, setBackup ] = useState( () => new URLSearchParams( window.location.search ).has( 'dropbox' ) );
     const [ backupResult, setBackupResult ] = useState<string | null>( () => new URLSearchParams( window.location.search ).get( 'dropbox' ) );
     const [ newColumn, setNewColumn ] = useState<string | null>( null );
-    const [ title, setTitle ] = useState( '' );
-    const [ busy, setBusy ] = useState( false );
     const [ boardLoading, setBoardLoading ] = useState( false );
     const activeIdRef = useRef( activeId );
     const requestSync = useRef<( boardId: string | null ) => void>( () => {} );
@@ -406,13 +405,12 @@ export default function Workspace ()
         }
     }
 
-    async function createTicket ()
+    async function createTicket ( title: string, columnId: string )
     {
         const boardId = activeIdRef.current;
         try
         {
-            setBusy( true );
-            const ticket = await api<Ticket>( `/boards/${ boardId }/tickets`, 'POST', { title, columnId: newColumn, assigneeId: account?.id } );
+            const ticket = await api<Ticket>( `/boards/${ boardId }/tickets`, 'POST', { title, columnId, assigneeId: account?.id } );
             if ( activeIdRef.current !== boardId )
             {
                 requestSync.current( boardId );
@@ -429,16 +427,12 @@ export default function Workspace ()
                 return next;
             } );
             requestSync.current( boardId );
-            setTitle( '' ); setNewColumn( null ); setCreatedTicketId( ticket.id );
+            setNewColumn( null ); setCreatedTicketId( ticket.id );
             setSelected( previous => previous?.boardId === ticket.boardId && previous.id === ticket.id && previous.revision > ticket.revision ? previous : ticket );
         }
         catch ( error )
         {
             reportError( error );
-        }
-        finally
-        {
-            setBusy( false );
         }
     }
 
@@ -530,7 +524,7 @@ export default function Workspace ()
             { backup && <BackupModal result={ backupResult } onClose={ () => { setBackup( false ); setBackupResult( null ); } } /> }
             { archive && data && <ArchiveModal data={ data } onClose={ () => { setArchive( false ); } } onOpen={ ticket => { setCreatedTicketId( null ); setSelected( ticket ); } } onChange={ changed } /> }
         </Suspense>
-        <Modal opened={ newColumn !== null } onClose={ () => { setNewColumn( null ); } } title={ t( 'New ticket' ) } centered><form onSubmit={ event => { event.preventDefault(); void createTicket(); } }><Stack><TextInput label={ t( 'Title' ) } placeholder={ t( 'What needs to happen?' ) } required maxLength={ 160 } value={ title } autoFocus onChange={ event => { setTitle( event.currentTarget.value ); } } /><Select label={ t( 'Column' ) } value={ newColumn } onChange={ setNewColumn } data={ data?.board.columns.map( column => ( { value: column.id, label: column.name } ) ) ?? [] } allowDeselect={ false } /><Button type="submit" loading={ busy } disabled={ !title.trim() }>{ t( 'Create ticket' ) }</Button></Stack></form></Modal>
+        { newColumn !== null && <NewTicketModal column={ newColumn } columns={ data?.board.columns ?? [] } onClose={ () => { setNewColumn( null ); } } onCreate={ createTicket } /> }
     </div>;
 }
 
