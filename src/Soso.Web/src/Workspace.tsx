@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState, useDeferredValue } from 'react';
 import { ActionIcon, Avatar, Badge, Button, Group, Loader, Modal, PasswordInput, Popover, Select, Stack, Text, TextInput, Tooltip, useComputedColorScheme, useMantineColorScheme } from '@mantine/core';
 import { Archive, Columns3, Languages, Plus, Search, Settings, LogOut, Sun, Moon, PanelLeftClose, PanelLeftOpen, Users, SlidersHorizontal, DatabaseBackup } from 'lucide-react';
-import { api, ApiError, refreshCsrf, imageUrl, ticketBody, tags, connectBoardEvents } from './api';
+import { api, ApiError, refreshCsrf, imageUrl, ticketBody, tags, connectBoardEvents, boardPath, slugFromPath } from './api';
 import type { Account, Board, BoardData, Ticket } from './api';
 import { reportError } from './feedback';
 import { BoardIcon } from './BoardIcon';
@@ -42,6 +42,7 @@ export default function Workspace ()
     const [ activeId, setActiveId ] = useState( '' );
     const [ loadedData, setData ] = useState<BoardData | null>( null );
     const loadedDataRef = useRef( loadedData );
+    const boardsRef = useRef( boards );
     const data = loadedData?.board.id === activeId ? loadedData : null;
     const accountId = account?.id;
     const accountTheme = account?.theme;
@@ -76,6 +77,7 @@ export default function Workspace ()
 
     useLayoutEffect( () => { activeIdRef.current = activeId; }, [ activeId ] );
     useLayoutEffect( () => { loadedDataRef.current = loadedData; }, [ loadedData ] );
+    useLayoutEffect( () => { boardsRef.current = boards; }, [ boards ] );
 
     useEffect( () =>
     {
@@ -125,7 +127,9 @@ export default function Workspace ()
                     return current && current.revision > board.revision ? current : board;
                 } ) );
                 const stored = localStorage.getItem( `soso-board-${ accountId }` );
-                const selectedBoard = result.find( board => board.id === stored ) ?? result[ 0 ];
+                const slug = slugFromPath();
+                const fromSlug = slug === null ? undefined : result.find( board => board.slug === slug );
+                const selectedBoard = fromSlug ?? ( slug === null ? result.find( board => board.id === stored ) ?? result[ 0 ] : undefined );
                 setActiveId( current => current && result.some( board => board.id === current ) ? current : selectedBoard?.id ?? '' );
             }
         } ).catch( reportError );
@@ -314,6 +318,35 @@ export default function Workspace ()
         return () => { alive = false; window.clearTimeout( retryTimer ); requestSync.current = () => {}; stop(); };
     }, [ accountId ] );
 
+    useEffect( () =>
+    {
+        if ( boards.length === 0 )
+        {
+            return;
+        }
+        const board = boards.find( item => item.id === activeId );
+        const path = board?.slug ? boardPath( board.slug ) : '/';
+        if ( window.location.pathname !== path )
+        {
+            window.history.replaceState( null, '', path );
+        }
+    }, [ activeId, boards ] );
+
+    useEffect( () =>
+    {
+        function handlePopState ()
+        {
+            const slug = slugFromPath();
+            const board = slug === null ? undefined : boards.find( item => item.slug === slug );
+            if ( board )
+            {
+                selectBoard( board.id, false );
+            }
+        }
+        window.addEventListener( 'popstate', handlePopState );
+        return () => { window.removeEventListener( 'popstate', handlePopState ); };
+    }, [ boards ] );
+
     function toggleSidebar ()
     {
         const next = !collapsed;
@@ -321,10 +354,17 @@ export default function Workspace ()
         localStorage.setItem( 'soso-sidebar-collapsed', String( next ) );
     }
 
-    function selectBoard ( id: string )
+    function selectBoard ( id: string, push = true )
     {
         activeIdRef.current = id;
         setActiveId( id ); setSelected( null ); setSearch( '' ); setAssignee( 'all' ); setTagFilter( [] ); setArchive( false );
+        const slug = boardsRef.current.find( board => board.id === id )?.slug;
+        const path = slug ? boardPath( slug ) : '/';
+        if ( window.location.pathname !== path )
+        {
+            if ( push ) { window.history.pushState( null, '', path ); }
+            else { window.history.replaceState( null, '', path ); }
+        }
         if ( window.innerWidth < 768 )
         {
             setCollapsed( true );

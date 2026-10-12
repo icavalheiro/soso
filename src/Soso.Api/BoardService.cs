@@ -1,5 +1,7 @@
 using System.Security.Claims;
 using System.ComponentModel.DataAnnotations;
+using System.Globalization;
+using System.Text;
 
 namespace Soso.Api;
 
@@ -85,6 +87,7 @@ public sealed class BoardService(Store store, BoardEventHub? events = null)
         var board = new Board { Name = Text(request.Name, 80), Description = request.Description.Trim(), Icon = CheckIcon(request.Icon ?? "columns"), Color = CheckColor(request.Color ?? "teal"), OwnerId = UserId(user), Columns = [new() { Name = "To do" }, new() { Name = "In progress" }, new() { Name = "Done", IsDone = true }] };
         lock (store.Gate)
         {
+            board.Slug = UniqueSlug(Slugify(board.Name));
             store.Boards.Insert(board);
             var audience = BoardAudience(board);
             store.AfterCommit(() => events?.Publish(board.Id, audience), $"board:{board.Id}");
@@ -346,6 +349,19 @@ public sealed class BoardService(Store store, BoardEventHub? events = null)
         }
     }
 
+    /// <summary>Assigns a URL slug to boards created before slugs existed. Safe to call on every startup.</summary>
+    public void EnsureSlugs()
+    {
+        lock (store.Gate)
+        {
+            foreach (var board in store.Boards.FindAll().Where(board => string.IsNullOrEmpty(board.Slug)).ToArray())
+            {
+                board.Slug = UniqueSlug(Slugify(board.Name));
+                store.Boards.Update(board);
+            }
+        }
+    }
+
     private static void CheckBatch<T>(T[]? tickets)
     {
         var validSize = tickets is { Length: >= 1 and <= 100 };
@@ -519,6 +535,62 @@ public sealed class BoardService(Store store, BoardEventHub? events = null)
 
     private static string SubtasksValue(IEnumerable<Subtask> subtasks) => string.Join("; ", subtasks.Select(task => $"{(task.Done ? "[x]" : "[ ]")} {task.Title}"));
     private static string SubtasksValue(IEnumerable<SubtaskRequest> subtasks) => string.Join("; ", subtasks.Select(task => $"{(task.Done ? "[x]" : "[ ]")} {task.Title}"));
+
+    /// <summary>Builds a URL-safe lowercase slug from a board name, e.g. "OtxIdle" -> "otxidle".</summary>
+    public static string Slugify(string name)
+    {
+        var normalized = name.Trim().ToLowerInvariant().Normalize(NormalizationForm.FormD);
+        var builder = new StringBuilder(normalized.Length);
+        var pendingSeparator = false;
+        foreach (var character in normalized)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(character) == UnicodeCategory.NonSpacingMark)
+            {
+                continue;
+            }
+            var isLetterOrDigit = character is >= 'a' and <= 'z' or >= '0' and <= '9';
+            if (isLetterOrDigit)
+            {
+                if (pendingSeparator && builder.Length > 0)
+                {
+                    builder.Append('-');
+                }
+                pendingSeparator = false;
+                builder.Append(character);
+            }
+            else
+            {
+                pendingSeparator = builder.Length > 0;
+            }
+        }
+        var slug = builder.ToString();
+        if (slug.Length > 60)
+        {
+            slug = slug[..60].TrimEnd('-');
+        }
+        return slug.Length == 0 ? "board" : slug;
+    }
+
+    private string UniqueSlug(string baseSlug)
+    {
+        var taken = store.Boards.FindAll()
+            .Select(board => board.Slug)
+            .Where(slug => !string.IsNullOrEmpty(slug))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (!taken.Contains(baseSlug))
+        {
+            return baseSlug;
+        }
+        for (var suffix = 2; suffix <= 10000; suffix++)
+        {
+            var candidate = $"{baseSlug}-{suffix}";
+            if (!taken.Contains(candidate))
+            {
+                return candidate;
+            }
+        }
+        return $"{baseSlug}-{Guid.NewGuid():N}";
+    }
 
     public static string Text(string value, int maximum)
     {

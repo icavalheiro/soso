@@ -1026,7 +1026,7 @@ test( 'tickets without descriptions open after switching boards', async ( { page
     Reflect.deleteProperty( ticket, 'description' );
     const otherBoard = {
         ...structuredClone( state.data ),
-        board: { ...structuredClone( state.data.board ), id: 'board-other', name: 'Another board' },
+        board: { ...structuredClone( state.data.board ), id: 'board-other', name: 'Another board', slug: 'another-board' },
         tickets: [],
     };
     const failures: string[] = [];
@@ -1060,6 +1060,30 @@ test( 'completed and archived tasks can be archived and restored', async ( { pag
     await expect( page.locator( '.archive-row' ) ).toHaveCount( 2 );
     await page.locator( '.archive-row' ).filter( { hasText: 'Set up repository' } ).getByRole( 'button', { name: 'Restore ticket' } ).click();
     await expect( page.locator( '.archive-row' ) ).toHaveCount( 1 );
+} );
+
+test( 'boards have deep links and the address bar follows board selection', async ( { page } ) =>
+{
+    const state = await installApiMock( page );
+    const otherBoard = {
+        ...structuredClone( state.data ),
+        board: { ...structuredClone( state.data.board ), id: 'board-other', name: 'Another board', slug: 'another-board' },
+        tickets: [],
+    };
+    await page.route( '**/api/boards', route => route.request().method() === 'GET' ? route.fulfill( { json: [ state.data.board, otherBoard.board ] } ) : route.fallback() );
+    await page.route( '**/api/boards/board-other', route => route.fulfill( { json: otherBoard } ) );
+
+    await page.goto( '/boards/another-board' );
+    await expect( page.getByRole( 'heading', { name: 'Another board', exact: true } ) ).toBeVisible();
+    await expect( page ).toHaveURL( /\/boards\/another-board$/ );
+
+    await page.getByRole( 'button', { name: 'Soso development', exact: true } ).click();
+    await expect( page.getByRole( 'heading', { name: 'Soso development', exact: true } ) ).toBeVisible();
+    await expect( page ).toHaveURL( /\/boards\/soso-development$/ );
+
+    await page.goBack();
+    await expect( page.getByRole( 'heading', { name: 'Another board', exact: true } ) ).toBeVisible();
+    await expect( page ).toHaveURL( /\/boards\/another-board$/ );
 } );
 
 test( 'administrator account screen', async ( { page } ) =>

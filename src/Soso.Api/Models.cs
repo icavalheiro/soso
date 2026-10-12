@@ -21,6 +21,7 @@ public sealed class Board
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Name { get; set; } = "";
+    public string Slug { get; set; } = "";
     public string Description { get; set; } = "";
     public string Icon { get; set; } = "columns";
     public string Color { get; set; } = "teal";
