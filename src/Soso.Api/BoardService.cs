@@ -88,6 +88,17 @@ public sealed class BoardService(Store store, BoardEventHub? events = null)
         lock (store.Gate)
         {
             board.Slug = UniqueSlug(Slugify(board.Name));
+            var code = NormalizeCode(request.Code, board.Name);
+            if (!string.IsNullOrWhiteSpace(request.Code))
+            {
+                CheckCodeUnique(code, null);
+            }
+            else
+            {
+                code = UniqueCode(code, null);
+            }
+            board.Code = code;
+            board.NextTicketNumber = 1;
             store.Boards.Insert(board);
             var audience = BoardAudience(board);
             store.AfterCommit(() => events?.Publish(board.Id, audience), $"board:{board.Id}");
@@ -122,6 +133,16 @@ public sealed class BoardService(Store store, BoardEventHub? events = null)
             board.Description = request.Description.Trim();
             board.Icon = CheckIcon(request.Icon ?? board.Icon);
             board.Color = CheckColor(request.Color ?? board.Color);
+            if (request.Code is not null)
+            {
+                var code = NormalizeCode(request.Code, board.Name);
+                CheckCodeUnique(code, board.Id);
+                board.Code = code;
+            }
+            else if (string.IsNullOrWhiteSpace(board.Code))
+            {
+                board.Code = UniqueCode(NormalizeCode(null, board.Name), board.Id);
+            }
             board.Members = request.Members.Distinct().ToList();
             var columns = request.Columns.Select(column => new BoardColumn { Id = column.Id, Name = Text(column.Name, 60), IsDone = column.IsDone }).ToList();
             var archivedColumnIds = tickets.Where(ticket => ticket.Archived).Select(ticket => ticket.ColumnId).ToHashSet();
@@ -191,9 +212,14 @@ public sealed class BoardService(Store store, BoardEventHub? events = null)
             }
             var position = store.Tickets.Find(ticket => ticket.BoardId == boardId).Select(ticket => ticket.Position).DefaultIfEmpty(0).Max() + 1024;
             var validSubtasks = subtasks.Select(task => new Subtask { Id = task.Id, Title = Text(task.Title, 300), Done = task.Done }).ToList();
-            var ticket = new Ticket { BoardId = boardId, ColumnId = request.ColumnId, Title = Text(request.Title, 160), Description = request.Description?.Trim() ?? "", Priority = request.Priority, Tags = tags.Distinct().ToList(), AssigneeId = request.AssigneeId, Position = position, Subtasks = validSubtasks };
+            if (board.NextTicketNumber < 1)
+            {
+                board.NextTicketNumber = store.Tickets.Find(ticket => ticket.BoardId == boardId).Select(ticket => ticket.Number).DefaultIfEmpty(0).Max() + 1;
+            }
+            var ticket = new Ticket { BoardId = boardId, ColumnId = request.ColumnId, Number = board.NextTicketNumber++, Title = Text(request.Title, 160), Description = request.Description?.Trim() ?? "", Priority = request.Priority, Tags = tags.Distinct().ToList(), AssigneeId = request.AssigneeId, Position = position, Subtasks = validSubtasks };
             Track(ticket, user, "created");
             store.Tickets.Insert(ticket);
+            store.Boards.Update(board);
             PublishChange(boardId);
             return ticket;
         }
@@ -332,6 +358,7 @@ public sealed class BoardService(Store store, BoardEventHub? events = null)
         lock (store.Gate)
         {
             var boardIds = boardId is null ? List(user).Select(board => board.Id).ToHashSet() : new HashSet<string> { RequireBoard(boardId, user).Id };
+            var codes = store.Boards.FindAll().Where(board => boardIds.Contains(board.Id)).ToDictionary(board => board.Id, board => board.Code ?? "");
             var matches = store.Tickets.FindAll()
                 .Where(ticket => boardIds.Contains(ticket.BoardId))
                 .Where(ticket => includeArchived || !ticket.Archived)
@@ -340,7 +367,8 @@ public sealed class BoardService(Store store, BoardEventHub? events = null)
                     || ticket.Description?.Contains(text, StringComparison.OrdinalIgnoreCase) == true
                     || ticket.Tags.Any(tag => tag.Contains(text, StringComparison.OrdinalIgnoreCase))
                     || ticket.Subtasks.Any(task => task.Title.Contains(text, StringComparison.OrdinalIgnoreCase))
-                    || ticket.Comments.Any(comment => comment.Text.Contains(text, StringComparison.OrdinalIgnoreCase)))
+                    || ticket.Comments.Any(comment => comment.Text.Contains(text, StringComparison.OrdinalIgnoreCase))
+                    || (codes.TryGetValue(ticket.BoardId, out var code) && !string.IsNullOrEmpty(code) && TicketKey(code, ticket.Number).Contains(text, StringComparison.OrdinalIgnoreCase)))
                 .OrderBy(ticket => ticket.BoardId, StringComparer.Ordinal)
                 .ThenBy(ticket => ticket.Position)
                 .ThenBy(ticket => ticket.Id, StringComparer.Ordinal)
@@ -359,6 +387,94 @@ public sealed class BoardService(Store store, BoardEventHub? events = null)
                 board.Slug = UniqueSlug(Slugify(board.Name));
                 store.Boards.Update(board);
             }
+        }
+    }
+
+    /// <summary>Backfills human-readable ticket keys for boards/tickets created before codes existed. Safe to call on every startup.</summary>
+    public void EnsureTicketKeys()
+    {
+        lock (store.Gate)
+        {
+            foreach (var board in store.Boards.FindAll().ToArray())
+            {
+                var changed = false;
+                if (string.IsNullOrWhiteSpace(board.Code))
+                {
+                    board.Code = UniqueCode(NormalizeCode(null, board.Name), board.Id);
+                    changed = true;
+                }
+                var tickets = store.Tickets.Find(ticket => ticket.BoardId == board.Id).OrderBy(ticket => ticket.Position).ThenBy(ticket => ticket.Id, StringComparer.Ordinal).ToArray();
+                var max = tickets.Select(ticket => ticket.Number).DefaultIfEmpty(0).Max();
+                foreach (var ticket in tickets.Where(ticket => ticket.Number < 1))
+                {
+                    ticket.Number = ++max;
+                    store.Tickets.Update(ticket);
+                }
+                if (board.NextTicketNumber < 1)
+                {
+                    board.NextTicketNumber = max + 1;
+                    changed = true;
+                }
+                else if (board.NextTicketNumber <= max)
+                {
+                    board.NextTicketNumber = max + 1;
+                    changed = true;
+                }
+                if (changed)
+                {
+                    store.Boards.Update(board);
+                }
+            }
+        }
+    }
+
+    /// <summary>Formats a human-readable ticket key, e.g. SOS-00001. Expands beyond 5 digits as needed.</summary>
+    public static string TicketKey(string code, int number) => $"{code}-{number:D5}";
+
+    public static string TicketKey(Board board, Ticket ticket) => TicketKey(board.Code, ticket.Number);
+
+    /// <summary>Normalizes a user-supplied board code or derives a 3-letter code from the board name (first 3 ASCII letters, diacritics removed).</summary>
+    public static string NormalizeCode(string? code, string name)
+    {
+        if (!string.IsNullOrWhiteSpace(code))
+        {
+            var normalized = new string(code.Trim().ToUpperInvariant().Where(char.IsAsciiLetter).ToArray());
+            if (normalized.Length is >= 2 and <= 10)
+            {
+                return normalized;
+            }
+            throw new ApiException(400, "Board code must contain 2 to 10 letters (A-Z).");
+        }
+        var clean = RemoveDiacritics(name.Trim()).ToUpperInvariant();
+        var letters = new string(clean.Where(char.IsAsciiLetter).ToArray());
+        if (letters.Length == 0)
+        {
+            return "SOS";
+        }
+        return letters.Length >= 3 ? letters[..3] : letters.PadRight(3, 'X');
+    }
+
+    private static string RemoveDiacritics(string value)
+    {
+        var builder = new StringBuilder(value.Length);
+        foreach (var character in value.Normalize(NormalizationForm.FormD))
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark)
+            {
+                builder.Append(character);
+            }
+        }
+        return builder.ToString().Normalize(NormalizationForm.FormC);
+    }
+
+    private bool IsCodeTaken(string candidate, string? excludeId) => store.Boards.FindAll()
+        .Any(board => board.Id != excludeId && string.Equals(board.Code, candidate, StringComparison.OrdinalIgnoreCase));
+
+    private void CheckCodeUnique(string candidate, string? excludeId)
+    {
+        if (IsCodeTaken(candidate, excludeId))
+        {
+            throw new ApiException(400, "This board code is already in use. Choose another one.");
         }
     }
 
@@ -590,6 +706,29 @@ public sealed class BoardService(Store store, BoardEventHub? events = null)
             }
         }
         return $"{baseSlug}-{Guid.NewGuid():N}";
+    }
+
+    private string UniqueCode(string candidate, string? excludeId)
+    {
+        var taken = store.Boards.FindAll()
+            .Where(board => board.Id != excludeId)
+            .Select(board => board.Code)
+            .Where(code => !string.IsNullOrEmpty(code))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (!taken.Contains(candidate))
+        {
+            return candidate;
+        }
+        for (var suffix = 2; suffix <= 10000; suffix++)
+        {
+            var suffixed = $"{candidate}{suffix}";
+            var trimmed = suffixed.Length <= 10 ? suffixed : suffixed[^10..];
+            if (!taken.Contains(trimmed))
+            {
+                return trimmed;
+            }
+        }
+        return $"{candidate}{Guid.NewGuid():N}"[^10..].ToUpperInvariant();
     }
 
     public static string Text(string value, int maximum)

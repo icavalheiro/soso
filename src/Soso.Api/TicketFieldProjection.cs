@@ -10,7 +10,7 @@ public static class TicketFieldProjection
     public static readonly string[] AllowedFields =
     [
         "id", "boardId", "columnId", "title", "description", "priority", "tags",
-        "archived", "assigneeId", "dueDate", "position", "revision",
+        "archived", "assigneeId", "dueDate", "position", "revision", "number",
         "subtasks", "comments", "activity", "images", "videos",
     ];
 
@@ -70,6 +70,7 @@ public static class TicketFieldProjection
             DueDate = selected.Contains("dueDate") ? ticket.DueDate : null,
             Position = selected.Contains("position") ? ticket.Position : 0,
             Revision = ticket.Revision,
+            Number = selected.Contains("number") ? ticket.Number : 0,
             Subtasks = selected.Contains("subtasks") ? ticket.Subtasks : [],
             Comments = selected.Contains("comments") ? ticket.Comments : [],
             Activity = selected.Contains("activity") ? ticket.Activity : [],

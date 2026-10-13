@@ -138,6 +138,7 @@ builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 
 var app = builder.Build();
 AuthEndpoints.Bootstrap(app.Services.GetRequiredService<Store>(), app.Configuration, app.Services.GetRequiredService<IPasswordHasher<Account>>());
 app.Services.GetRequiredService<BoardService>().EnsureSlugs();
+app.Services.GetRequiredService<BoardService>().EnsureTicketKeys();
 app.UseForwardedHeaders();
 app.UseWebSockets();
 if (!app.Environment.IsDevelopment() && !app.Environment.IsEnvironment("Testing"))

@@ -5,7 +5,7 @@ export function fixture (): { account: Account; data: BoardData; }
 {
     const account: Account = { id: 'admin-fixture', name: 'Maya Chen', email: 'maya@example.test', isAdmin: true, disabled: false, avatarId: null, theme: 'light', settings: '', boardIds: null };
     const data: BoardData = {
-        board: { id: 'board-fixture', name: 'Soso development', slug: 'soso-development', description: 'Sprint 01', icon: 'columns', color: 'teal', ownerId: account.id, members: [ 'sam-fixture' ], revision: 0, columns: [ { id: 'todo', name: 'To do', isDone: false }, { id: 'progress', name: 'In progress', isDone: false }, { id: 'done', name: 'Done', isDone: true } ] },
+        board: { id: 'board-fixture', name: 'Soso development', slug: 'soso-development', code: 'SOS', description: 'Sprint 01', icon: 'columns', color: 'teal', ownerId: account.id, members: [ 'sam-fixture' ], revision: 0, nextTicketNumber: 6, columns: [ { id: 'todo', name: 'To do', isDone: false }, { id: 'progress', name: 'In progress', isDone: false }, { id: 'done', name: 'Done', isDone: true } ] },
         members: [ account, { id: 'sam-fixture', name: 'Sam Rivers', avatarId: null } ], tickets: [],
     };
     const entries = [
@@ -15,7 +15,7 @@ export function fixture (): { account: Account; data: BoardData; }
         { title: 'Set up repository', description: 'Repository, README and basic tooling are in place.', columnId: 'done', tags: [ 'feature', 'docs' ], assigneeId: 'sam-fixture' },
         { title: 'Update dependency audit', description: 'Review the dependency report before the release.', columnId: 'done', tags: [ 'chore' ], assigneeId: account.id, archived: true },
     ];
-    data.tickets = entries.map( ( entry, index ) => ( { id: `ticket-${ index }`, boardId: data.board.id, priority: index === 2 ? 'urgent' : 'normal', archived: false, dueDate: null, position: ( index + 1 ) * 1024, revision: 0, subtasks: [], comments: [], activity: [], images: [], videos: [], ...entry } ) );
+    data.tickets = entries.map( ( entry, index ) => ( { id: `ticket-${ index }`, boardId: data.board.id, number: index + 1, priority: index === 2 ? 'urgent' : 'normal', archived: false, dueDate: null, position: ( index + 1 ) * 1024, revision: 0, subtasks: [], comments: [], activity: [], images: [], videos: [], ...entry } ) );
     return { account, data };
 }
 
@@ -146,7 +146,7 @@ export async function installApiMock ( page: Page, authenticated = true )
         if ( path === `/api/boards/${ state.data.board.id }/tickets` && method === 'POST' )
         {
             const input = request.postDataJSON();
-            const ticket = { id: `ticket-${ sequence++ }`, boardId: state.data.board.id, description: '', priority: 'normal', tags: [], archived: false, assigneeId: null, dueDate: null, position: ( state.data.tickets.length + 1 ) * 1024, revision: 0, subtasks: [], comments: [], activity: [ { id: `activity-${ sequence++ }`, actorId: state.account.id, actorName: state.account.name, action: 'created', field: null, oldValue: null, newValue: null, createdAt: new Date().toISOString() } ], images: [], videos: [], ...input };
+            const ticket = { id: `ticket-${ sequence++ }`, boardId: state.data.board.id, number: state.data.board.nextTicketNumber++, description: '', priority: 'normal', tags: [], archived: false, assigneeId: null, dueDate: null, position: ( state.data.tickets.length + 1 ) * 1024, revision: 0, subtasks: [], comments: [], activity: [ { id: `activity-${ sequence++ }`, actorId: state.account.id, actorName: state.account.name, action: 'created', field: null, oldValue: null, newValue: null, createdAt: new Date().toISOString() } ], images: [], videos: [], ...input };
             state.data.tickets.push( ticket );
             return reply( ticket, 201 );
         }

@@ -50,7 +50,7 @@ test( 'a remote event queued during a local save reloads other tickets and keeps
         if ( route.request().method() !== 'POST' ) { return route.fallback(); }
         await new Promise<void>( resolve => { releaseLocal = resolve; } );
         const input = route.request().postDataJSON();
-        const ticket = { id: `ticket-local`, boardId: state.data.board.id, description: '', priority: 'normal', tags: [], archived: false, assigneeId: null, dueDate: null, position: 6144, revision: 0, subtasks: [], comments: [], activity: [], images: [], videos: [], ...input };
+        const ticket = { id: `ticket-local`, boardId: state.data.board.id, number: state.data.board.nextTicketNumber++, description: '', priority: 'normal', tags: [], archived: false, assigneeId: null, dueDate: null, position: 6144, revision: 0, subtasks: [], comments: [], activity: [], images: [], videos: [], ...input };
         state.data.tickets.push( ticket );
         await route.fulfill( { status: 201, json: ticket } );
     } );
@@ -576,6 +576,7 @@ test( 'create and edit board icons persist after reload', async ( { page }, test
     await page.goto( '/' );
     await page.getByRole( 'button', { name: 'Create board', exact: true } ).click();
     await page.getByRole( 'textbox', { name: /^Name/ } ).fill( 'Personal plans' );
+    await page.getByRole( 'textbox', { name: /^Ticket code/ } ).fill( 'PER' );
     await page.getByRole( 'button', { name: 'Board icon: Travel', exact: true } ).click();
     await expect( page.getByRole( 'button', { name: 'Board icon: Travel', exact: true } ) ).toHaveAttribute( 'aria-pressed', 'true' );
     await page.getByRole( 'button', { name: 'Board color: Blue', exact: true } ).click();
@@ -607,6 +608,21 @@ test( 'create and edit board icons persist after reload', async ( { page }, test
     await expect( page.getByRole( 'button', { name: 'Board color: Pink', exact: true } ) ).toHaveAttribute( 'aria-pressed', 'true' );
     await expect( page.getByRole( 'button', { name: 'Board icon: Goals', exact: true } ).locator( 'svg' ) ).toHaveCSS( 'stroke', 'rgb(247, 131, 172)' );
     await page.screenshot( { path: testInfo.outputPath( 'board-color-dark.png' ) } );
+} );
+
+test( 'tickets show board code keys and follow the board code', async ( { page } ) =>
+{
+    const state = await installApiMock( page );
+    await page.goto( '/' );
+    await expect( page.locator( '.ticket-id' ).first() ).toHaveText( 'SOS-00001' );
+    await page.getByRole( 'button', { name: 'Open ticket: Sketch the board layout', exact: true } ).click();
+    await expect( page.locator( '.modal-ticket-id' ) ).toHaveText( 'SOS-00001' );
+    await page.keyboard.press( 'Escape' );
+    await page.getByRole( 'button', { name: 'Board settings', exact: true } ).click();
+    await page.getByRole( 'textbox', { name: /^Ticket code/ } ).fill( 'DEV' );
+    await page.getByRole( 'button', { name: 'Save board', exact: true } ).click();
+    expect( state.data.board.code ).toBe( 'DEV' );
+    await expect( page.locator( '.ticket-id' ).first() ).toHaveText( 'DEV-00001' );
 } );
 
 for ( const width of [ 1366, 390 ] )

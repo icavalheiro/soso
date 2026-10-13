@@ -11,6 +11,7 @@ export function BoardModal ( { board, onClose, onSave, onDelete }: { board?: Boa
 {
     const { t } = useLanguage();
     const [ name, setName ] = useState( board?.name ?? '' );
+    const [ code, setCode ] = useState( board?.code ?? '' );
     const [ description, setDescription ] = useState( board?.description ?? '' );
     const [ icon, setIcon ] = useState( board?.icon ?? 'columns' );
     const [ color, setColor ] = useState( board?.color ?? 'teal' );
@@ -26,7 +27,7 @@ export function BoardModal ( { board, onClose, onSave, onDelete }: { board?: Boa
         setBusy( true );
         try
         {
-            const result = board ? await api<Board>( `/boards/${ board.id }`, 'PUT', { name, description, icon, color, members, columns, revision: board.revision } ) : await api<Board>( '/boards', 'POST', { name, description, icon, color } );
+            const result = board ? await api<Board>( `/boards/${ board.id }`, 'PUT', { name, description, icon, color, members, columns, revision: board.revision, code } ) : await api<Board>( '/boards', 'POST', { name, description, icon, color, code: code || undefined } );
             onSave( result );
         }
         catch ( error )
@@ -46,6 +47,7 @@ export function BoardModal ( { board, onClose, onSave, onDelete }: { board?: Boa
     }
     return <Modal opened onClose={ onClose } title={ t( board ? 'Board settings' : 'Create board' ) } centered size="md"><form onSubmit={ event => { void save( event ); } }><Stack>
         <TextInput label={ t( 'Name' ) } required maxLength={ 80 } autoFocus value={ name } onChange={ event => { setName( event.currentTarget.value ); } } />
+        <TextInput label={ t( 'Ticket code' ) } description={ t( '2 to 10 letters used in ticket ids, e.g. SOS-00001.' ) } required maxLength={ 10 } value={ code } onChange={ event => { setCode( event.currentTarget.value.toUpperCase().replace( /[^A-Z]/g, '' ).slice( 0, 10 ) ); } } placeholder="SOS" />
         <BoardIconPicker value={ icon } color={ color } onChange={ setIcon } />
         <BoardColorPicker value={ color } onChange={ setColor } />
         <Textarea label={ t( 'Description' ) } maxLength={ 2000 } value={ description } onChange={ event => { setDescription( event.currentTarget.value ); } } />

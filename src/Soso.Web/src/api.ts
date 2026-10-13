@@ -1,11 +1,11 @@
 export type Account = { id: string; email: string; name: string; isAdmin: boolean; disabled: boolean; avatarId: string | null; theme: 'light' | 'dark'; settings: string; boardIds: string[] | null; };
 export type Person = Pick<Account, 'id' | 'name' | 'avatarId'>;
 export type Column = { id: string; name: string; isDone: boolean; };
-export type Board = { id: string; name: string; slug: string; description: string; icon: string; color: string; ownerId: string; members: string[]; columns: Column[]; removedColumns?: { column: Column; position: number; }[]; revision: number; };
+export type Board = { id: string; name: string; slug: string; code: string; description: string; icon: string; color: string; ownerId: string; members: string[]; columns: Column[]; removedColumns?: { column: Column; position: number; }[]; nextTicketNumber: number; revision: number; };
 export type Subtask = { id: string; title: string; done: boolean; };
 export type Comment = { id: string; authorId: string; text: string; createdAt: string; };
 export type TicketActivity = { id: string; actorId: string; actorName: string; action: string; field: string | null; oldValue: string | null; newValue: string | null; createdAt: string; };
-export type Ticket = { id: string; boardId: string; columnId: string; title: string; description: string; priority: string; tags: string[]; archived: boolean; assigneeId: string | null; dueDate: string | null; position: number; revision: number; subtasks: Subtask[]; comments: Comment[]; activity: TicketActivity[]; images: string[]; videos: string[]; };
+export type Ticket = { id: string; boardId: string; columnId: string; number: number; title: string; description: string; priority: string; tags: string[]; archived: boolean; assigneeId: string | null; dueDate: string | null; position: number; revision: number; subtasks: Subtask[]; comments: Comment[]; activity: TicketActivity[]; images: string[]; videos: string[]; };
 export type BoardData = { board: Board; tickets: Ticket[]; members: Person[]; };
 export type Token = { id: string; name: string; expiresAt: string; boardIds: string[]; };
 export type BoardChangedEvent = { boardId: string | null; };
@@ -84,6 +84,13 @@ export function slugFromPath ( pathname = window.location.pathname )
 export function newId ()
 {
     return crypto.randomUUID().replaceAll( '-', '' );
+}
+
+export function ticketKey ( board: Pick<Board, 'code'> | undefined, ticket: Pick<Ticket, 'number'> )
+{
+    const code = ( board?.code ?? '' ).toUpperCase() || 'SOS';
+    const number = ticket.number > 0 ? ticket.number : 0;
+    return `${ code }-${ String( number ).padStart( 5, '0' ) }`;
 }
 
 export function ticketBody ( ticket: Ticket )

@@ -8,7 +8,7 @@ import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from '@dnd-kit/utilities';
 import { ActionIcon, Avatar, Button, Checkbox, CopyButton, FileButton, Group, Modal, MultiSelect, Progress, Select, Stack, Text, Textarea, TextInput, Tooltip } from '@mantine/core';
 import { Archive, ArchiveRestore, Check, CheckSquare, ChevronDown, Eye, GripVertical, ImagePlus, MessageSquare, Pencil, Play, Plus, Save, Send, Trash2, Video } from 'lucide-react';
-import { api, imageUrl, newId, ticketBody, tags, videoThumbnailUrl, videoUrl } from './api';
+import { api, imageUrl, newId, ticketBody, ticketKey, tags, videoThumbnailUrl, videoUrl } from './api';
 import type { Account, BoardData, Subtask, Ticket } from './api';
 import { reportError } from './feedback';
 import { useLanguage } from './useLanguage';
@@ -378,7 +378,7 @@ export function TicketModal ( { ticket, data, account, focusDescription, onClose
         return <button type="button" className="ticket-inline-image" aria-label={ t( 'View attached image' ) } onClick={ () => { setPreview( id ); } }><img src={ imageUrl( id ) } alt={ alt || t( 'Ticket attachment' ) } onError={ event => { event.currentTarget.hidden = true; } } /></button>;
     }
 
-    return <Modal opened onClose={ close } title={ <span className="modal-ticket-label">{ t( 'Ticket' ).toUpperCase() } <CopyButton value={ ticket.id } timeout={ 1500 }>{ ( { copied, copy } ) => <Tooltip label={ copied ? t( 'Copied' ) : t( 'Copy ticket id' ) }><button type="button" className="modal-ticket-id" aria-label={ t( 'Copy ticket id' ) } onClick={ copy }>{ copied ? <Check size={ 12 } /> : null }#{ ticket.id.slice( 0, 5 ).toUpperCase() }</button></Tooltip> }</CopyButton></span> } size={ 880 } centered closeOnClickOutside={ false } closeOnEscape={ !busy } withCloseButton={ !busy } trapFocus={ !focusSearchOutsideModal }>
+    return <Modal opened onClose={ close } title={ <span className="modal-ticket-label">{ t( 'Ticket' ).toUpperCase() } <CopyButton value={ ticketKey( data.board, ticket ) } timeout={ 1500 }>{ ( { copied, copy } ) => <Tooltip label={ copied ? t( 'Copied' ) : t( 'Copy ticket id' ) }><button type="button" className="modal-ticket-id" aria-label={ t( 'Copy ticket id' ) } onClick={ copy }>{ copied ? <Check size={ 12 } /> : null }{ ticketKey( data.board, ticket ) }</button></Tooltip> }</CopyButton></span> } size={ 880 } centered closeOnClickOutside={ false } closeOnEscape={ !busy } withCloseButton={ !busy } trapFocus={ !focusSearchOutsideModal }>
         <form ref={ form } onSubmit={ event => { event.preventDefault(); void action( async () => { await saveDraft(); onClose(); } ); } }>
             <fieldset className="ticket-fieldset" disabled={ busy }>
                 <Group className="ticket-title-row" justify="space-between" gap="xs" wrap="nowrap">

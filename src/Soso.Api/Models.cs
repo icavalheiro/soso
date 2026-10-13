@@ -22,6 +22,7 @@ public sealed class Board
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Name { get; set; } = "";
     public string Slug { get; set; } = "";
+    public string Code { get; set; } = "";
     public string Description { get; set; } = "";
     public string Icon { get; set; } = "columns";
     public string Color { get; set; } = "teal";
@@ -29,6 +30,7 @@ public sealed class Board
     public List<string> Members { get; set; } = [];
     public List<BoardColumn> Columns { get; set; } = [];
     public List<RemovedBoardColumn> RemovedColumns { get; set; } = [];
+    public int NextTicketNumber { get; set; } = 1;
     public int Revision { get; set; }
 }
 
@@ -44,6 +46,7 @@ public sealed class Ticket
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string BoardId { get; set; } = "";
     public string ColumnId { get; set; } = "";
+    public int Number { get; set; }
     public string Title { get; set; } = "";
     public string Description { get; set; } = "";
     public string Priority { get; set; } = "normal";

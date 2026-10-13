@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ActionIcon, Avatar, Badge, Button, Group, Loader, Modal, PasswordInput, Popover, Select, Stack, Text, TextInput, Tooltip, useComputedColorScheme, useMantineColorScheme } from '@mantine/core';
 import { Archive, Columns3, Languages, Plus, Settings, LogOut, Sun, Moon, PanelLeftClose, PanelLeftOpen, Users, SlidersHorizontal, DatabaseBackup } from 'lucide-react';
-import { api, ApiError, refreshCsrf, imageUrl, ticketBody, tags, connectBoardEvents, boardPath, slugFromPath } from './api';
+import { api, ApiError, refreshCsrf, imageUrl, ticketBody, ticketKey, tags, connectBoardEvents, boardPath, slugFromPath } from './api';
 import type { Account, Board, BoardData, Ticket } from './api';
 import { reportError } from './feedback';
 import { BoardIcon } from './BoardIcon';
@@ -459,12 +459,12 @@ export default function Workspace ()
 
     const filtered = useMemo( () => data?.tickets.filter( ticket =>
     {
-        const matchesQuery = `${ ticket.id } ${ ticket.title } ${ ticket.description }`.toLowerCase().includes( query.toLowerCase() );
+        const matchesQuery = `${ ticket.id } ${ ticketKey( data.board, ticket ) } ${ ticket.title } ${ ticket.description }`.toLowerCase().includes( query.toLowerCase() );
         const matchesPriority = priority === 'all' || ticket.priority === priority;
         const matchesTags = tagFilter.length === 0 || tagFilter.some( tag => ticket.tags.includes( tag ) );
         const matchesAssignee = assignee === 'all' || ( assignee === 'unassigned' ? ticket.assigneeId === null : ticket.assigneeId === assignee );
         return !ticket.archived && matchesQuery && matchesPriority && matchesTags && matchesAssignee;
-    } ) ?? [], [ data?.tickets, query, priority, tagFilter, assignee ] );
+    } ) ?? [], [ data, query, priority, tagFilter, assignee ] );
 
     if ( booting )
     {
