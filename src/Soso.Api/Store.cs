@@ -13,6 +13,7 @@ public sealed class Store : IDisposable
     public ILiteCollection<Board> Boards => database.GetCollection<Board>("boards");
     public ILiteCollection<Ticket> Tickets => database.GetCollection<Ticket>("tickets");
     public ILiteCollection<ImageAsset> Images => database.GetCollection<ImageAsset>("images");
+    public ILiteCollection<VideoLink> VideoLinks => database.GetCollection<VideoLink>("videoLinks");
     public ILiteCollection<AccessToken> Tokens => database.GetCollection<AccessToken>("tokens");
     public ILiteCollection<DropboxBackupConfiguration> DropboxConfigurations => database.GetCollection<DropboxBackupConfiguration>("dropboxBackup");
     public ILiteCollection<BackupState> BackupStates => database.GetCollection<BackupState>("backupState");

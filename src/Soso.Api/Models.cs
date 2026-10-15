@@ -94,6 +94,20 @@ public sealed class ImageAsset
     public byte[] Thumbnail { get; set; } = [];
 }
 
+/// <summary>
+/// Single-use ticket-video download grant. Only the SHA-256 hash of the secret is stored.
+/// </summary>
+public sealed class VideoLink
+{
+    public string Id { get; set; } = "";
+    public string VideoId { get; set; } = "";
+    public string TicketId { get; set; } = "";
+    public string BoardId { get; set; } = "";
+    public string OwnerId { get; set; } = "";
+    public DateTime ExpiresAt { get; set; }
+    public bool Used { get; set; }
+}
+
 public sealed class AccessToken
 {
     public string Id { get; set; } = "";

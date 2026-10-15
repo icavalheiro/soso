@@ -70,7 +70,9 @@ development, not public deployments.
   Clearing Assigned boards and saving removes access on subsequent operations.
 - Board configuration and membership are managed by the owner or an administrator
   through the web UI. The exposed MCP tools do not create or configure boards,
-  create accounts, change passwords, manage tokens or upload attachments.
+  create accounts, change passwords or manage tokens. Ticket attachments can be
+  listed, previewed, uploaded and removed through the dedicated attachment tools
+  below; full video files are fetched through single-use download links.
 - Tickets belong to one board and reference a column ID, not its display name.
   Resolve actual board, column, ticket and member IDs from tool responses; never
   invent IDs or assume a column named Done exists.
@@ -258,6 +260,41 @@ column, position, archive state, comments and images remain unchanged.
 
 To unassign and remove the deadline only, send:
 {"revision": CURRENT-TICKET-REVISION, "clearAssignee": true, "clearDueDate": true}.
+
+list_ticket_attachments(boardId: string, ticketId: string)
+  Returns the ticket's image and video attachments as metadata (id, kind,
+  contentType, sizes). IDs match the ticket's images/videos fields from
+  get_board.
+
+get_ticket_image(boardId: string, ticketId: string, imageId: string)
+  Returns one attached image as viewable MCP image content with a metadata line.
+
+get_ticket_video_thumbnail(boardId: string, ticketId: string, videoId: string)
+  Returns a video's metadata (content type, full size) plus its PNG thumbnail
+  as viewable MCP image content. Full video bytes are never sent over MCP.
+
+upload_ticket_image(boardId: string, ticketId: string, contentBase64: string,
+                    fileName?: string)
+  Attaches an image (PNG, JPEG, GIF, WebP, BMP or TIFF, decoded under 5 MB)
+  sent as base64. The server applies the same single-frame, megapixel, resize
+  and strip validation as browser uploads. A ticket holds at most six attachments.
+
+upload_ticket_video(boardId: string, ticketId: string, contentBase64: string,
+                    contentType: string, thumbnailBase64: string)
+  Attaches a video (video/mp4, video/webm or video/ogg, decoded under 50 MB)
+  with a thumbnail image, both sent as base64. Base64 adds about 33% overhead,
+  so stay well under the decoded limit. The server validates the video
+  signature and converts it to browser MP4 exactly like browser uploads.
+
+remove_ticket_attachment(boardId: string, ticketId: string, attachmentId: string)
+  Detaches an image or video from the ticket and deletes its stored bytes.
+  Also invalidates that attachment's download links.
+
+create_ticket_video_download_link(boardId: string, ticketId: string, videoId: string)
+  Mints a single-use download URL for a ticket video, valid for 1 hour.
+  Fetch the full MP4 with plain curl and no auth headers using the returned
+  curl example. Reusing or expired links return 404. Only the hashes of issued
+  tokens are stored.
 
 ### Specification, Progress and Completion
 

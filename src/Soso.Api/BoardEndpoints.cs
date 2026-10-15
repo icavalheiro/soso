@@ -1,12 +1,9 @@
 using System.Security.Claims;
-using ImageMagick;
 
 namespace Soso.Api;
 
 public static class BoardEndpoints
 {
-    private static readonly SemaphoreSlim ImageGate = new(2);
-    private static readonly SemaphoreSlim VideoGate = new(2);
     public static void MapBoards(this WebApplication app)
     {
         var boards = app.MapGroup("/api/boards");
@@ -98,118 +95,53 @@ public static class BoardEndpoints
             context.Response.Headers.CacheControl = "private, no-store";
             return TypedResults.File(video.Thumbnail, "image/png");
         });
+        app.MapGet("/api/video-links/{token}", (string token, BoardService service, HttpContext context) =>
+        {
+            var (content, contentType) = service.RedeemVideoLink(token);
+            context.Response.Headers.CacheControl = "private, no-store";
+            return TypedResults.File(content, contentType, "video.mp4");
+        }).AllowAnonymous();
     }
 
     private static async Task<byte[]> ReadImage(HttpContext context)
     {
-        var acquired = await ImageGate.WaitAsync(TimeSpan.FromSeconds(5), context.RequestAborted);
-        if (!acquired)
+        return await AttachmentProcessor.WithImageGate(async () =>
         {
-            throw new ApiException(429, "Image processing is busy. Try again shortly.");
-        }
-        try
-        {
-            return await DecodeImage(context);
-        }
-        finally
-        {
-            ImageGate.Release();
-        }
+            if (!context.Request.HasFormContentType)
+            {
+                throw new ApiException(400, "Upload a multipart image file.");
+            }
+            var form = await context.Request.ReadFormAsync(context.RequestAborted);
+            return DecodeImageFormFile(form.Files.GetFile("file"), context.RequestAborted);
+        }, context.RequestAborted);
     }
 
-    private static async Task<byte[]> DecodeImage(HttpContext context)
+    private static byte[] DecodeImageFormFile(IFormFile? file, CancellationToken cancellationToken)
     {
-        var isMultipart = context.Request.HasFormContentType;
-        if (!isMultipart)
+        if (file is not { Length: > 0 and <= AttachmentProcessor.MaxImageBytes })
         {
-            throw new ApiException(400, "Upload a multipart image file.");
+            throw new ApiException(400, "Choose an image under 5 MB.");
         }
-        var form = await context.Request.ReadFormAsync(context.RequestAborted);
-        var file = form.Files.GetFile("file");
-        return await DecodeImageFile(file, context.RequestAborted);
+        using var content = new MemoryStream();
+        using var stream = file.OpenReadStream();
+        stream.CopyTo(content);
+        return AttachmentProcessor.DecodeImageBytes(content.ToArray(), cancellationToken);
     }
 
     private static async Task<(byte[] Content, string ContentType, byte[] Thumbnail)> ReadVideo(HttpContext context)
     {
-        var acquired = await VideoGate.WaitAsync(TimeSpan.FromSeconds(5), context.RequestAborted);
-        if (!acquired)
-        {
-            throw new ApiException(429, "Video processing is busy. Try again shortly.");
-        }
-        try
+        return await AttachmentProcessor.WithVideoGate(async () =>
         {
             var form = await context.Request.ReadFormAsync(context.RequestAborted);
             var file = form.Files.GetFile("file");
-            if (file is not { Length: > 0 and <= 50 * 1024 * 1024 })
+            if (file is not { Length: > 0 and <= AttachmentProcessor.MaxVideoBytes })
             {
                 throw new ApiException(400, "Choose a video under 50 MB.");
             }
-            var contentType = file.ContentType.ToLowerInvariant();
-            if (contentType is not ("video/mp4" or "video/webm" or "video/ogg"))
-            {
-                throw new ApiException(400, "Use an MP4, WebM or Ogg video.");
-            }
-            var thumbnail = await DecodeImageFile(form.Files.GetFile("thumbnail"), context.RequestAborted);
             await using var stream = new MemoryStream();
             await file.CopyToAsync(stream, context.RequestAborted);
-            var content = stream.ToArray();
-            if (!HasVideoSignature(content, contentType))
-            {
-                throw new ApiException(400, "The video content does not match its file type.");
-            }
-            content = await VideoTranscoder.ConvertToBrowserMp4Async(content, context.RequestAborted);
-            return (content, "video/mp4", thumbnail);
-        }
-        finally
-        {
-            VideoGate.Release();
-        }
-    }
-
-    private static bool HasVideoSignature(byte[] content, string contentType) => contentType switch
-    {
-        "video/mp4" => content.Length >= 8 && content.AsSpan(4, 4).SequenceEqual("ftyp"u8),
-        "video/webm" => content.AsSpan().StartsWith(new byte[] { 0x1A, 0x45, 0xDF, 0xA3 }),
-        "video/ogg" => content.AsSpan().StartsWith("OggS"u8),
-        _ => false
-    };
-
-    private static async Task<byte[]> DecodeImageFile(IFormFile? file, CancellationToken cancellationToken)
-    {
-        var validSize = file is { Length: > 0 and <= 5 * 1024 * 1024 };
-        if (!validSize)
-        {
-            throw new ApiException(400, "Choose an image under 5 MB.");
-        }
-        try
-        {
-            await using var stream = file!.OpenReadStream();
-            using var content = new MemoryStream();
-            await stream.CopyToAsync(content, cancellationToken);
-            var input = content.ToArray();
-            using var information = new MagickImageCollection();
-            information.Ping(input);
-            var first = information.Count == 0 ? null : information[0];
-            var allowed = first is not null && ImageProcessing.AllowedFormats.Contains(first.Format);
-            if (!allowed || information.Count != 1 || (long)first!.Width * first.Height > 16_000_000)
-            {
-                throw new ApiException(400, "Use a single-frame PNG, JPEG, GIF, WebP, BMP or TIFF image up to 16 megapixels.");
-            }
-            cancellationToken.ThrowIfCancellationRequested();
-            using var image = new MagickImage(input);
-            image.Resize(new MagickGeometry(1600, 1600) { Greater = true });
-            image.Strip();
-            var bytes = image.ToByteArray(MagickFormat.Png);
-            cancellationToken.ThrowIfCancellationRequested();
-            if (bytes.Length > 5 * 1024 * 1024)
-            {
-                throw new ApiException(400, "Processed image is too large.");
-            }
-            return bytes;
-        }
-        catch (MagickException)
-        {
-            throw new ApiException(400, "Invalid image file.");
-        }
+            var thumbnail = DecodeImageFormFile(form.Files.GetFile("thumbnail"), context.RequestAborted);
+            return await AttachmentProcessor.ValidateVideoUploadAsync(stream.ToArray(), file.ContentType, thumbnail, context.RequestAborted);
+        }, context.RequestAborted);
     }
 }

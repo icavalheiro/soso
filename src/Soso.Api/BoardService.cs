@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Text;
@@ -572,12 +573,125 @@ public sealed class BoardService(Store store, BoardEventHub? events = null)
                 throw new ApiException(404, "Image not found.");
             }
             store.Images.Delete(imageId);
+            store.VideoLinks.DeleteMany(link => link.VideoId == imageId);
             Track(ticket, user, "image_removed", "image", imageId);
             ticket.Revision++;
             store.Tickets.Update(ticket);
             PublishChange(boardId);
             return ticket;
         }
+    }
+
+    public AttachmentInfo[] ListAttachments(string boardId, string ticketId, ClaimsPrincipal user)
+    {
+        lock (store.Gate)
+        {
+            var ticket = RequireTicket(boardId, ticketId, user);
+            var infos = new List<AttachmentInfo>();
+            foreach (var id in ticket.Images)
+            {
+                var asset = store.Images.FindById(id);
+                if (asset is not null)
+                {
+                    infos.Add(new(id, "image", asset.ContentType, asset.Content.LongLength, null));
+                }
+            }
+            foreach (var id in ticket.Videos)
+            {
+                var asset = store.Images.FindById(id);
+                if (asset is not null)
+                {
+                    infos.Add(new(id, "video", asset.ContentType, asset.Content.LongLength, asset.Thumbnail.LongLength));
+                }
+            }
+            return infos.ToArray();
+        }
+    }
+
+    public ImageAsset TicketImage(string boardId, string ticketId, string imageId, ClaimsPrincipal user)
+    {
+        lock (store.Gate)
+        {
+            var ticket = RequireTicket(boardId, ticketId, user);
+            var attached = ticket.Images.Contains(imageId);
+            var asset = attached ? store.Images.FindById(imageId) : null;
+            if (asset is null)
+            {
+                throw new ApiException(404, "Image not found.");
+            }
+            return asset;
+        }
+    }
+
+    public ImageAsset TicketVideo(string boardId, string ticketId, string videoId, ClaimsPrincipal user)
+    {
+        lock (store.Gate)
+        {
+            var ticket = RequireTicket(boardId, ticketId, user);
+            var attached = ticket.Videos.Contains(videoId);
+            var asset = attached ? store.Images.FindById(videoId) : null;
+            if (asset is null)
+            {
+                throw new ApiException(404, "Video not found.");
+            }
+            return asset;
+        }
+    }
+
+    /// <summary>Mints a single-use video download grant valid for one hour. Only the secret hash is stored.</summary>
+    public (string Secret, VideoLink Link) CreateVideoLink(string boardId, string ticketId, string videoId, ClaimsPrincipal user)
+    {
+        lock (store.Gate)
+        {
+            var ticket = RequireTicket(boardId, ticketId, user);
+            if (!ticket.Videos.Contains(videoId) || store.Images.FindById(videoId) is null)
+            {
+                throw new ApiException(404, "Video not found.");
+            }
+            PurgeExpiredVideoLinks();
+            var secret = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+            var link = new VideoLink
+            {
+                Id = AuthEndpoints.HashToken(secret),
+                VideoId = videoId,
+                TicketId = ticketId,
+                BoardId = boardId,
+                OwnerId = UserId(user),
+                ExpiresAt = DateTime.UtcNow.AddHours(1),
+            };
+            store.VideoLinks.Insert(link);
+            return (secret, link);
+        }
+    }
+
+    /// <summary>Atomically consumes a video download grant and returns the video bytes.</summary>
+    public (byte[] Content, string ContentType) RedeemVideoLink(string token)
+    {
+        lock (store.Gate)
+        {
+            var link = token.Length <= 256 ? store.VideoLinks.FindById(AuthEndpoints.HashToken(token)) : null;
+            if (link is null || link.Used || link.ExpiresAt <= DateTime.UtcNow)
+            {
+                throw new ApiException(404, "Video link not found or expired.");
+            }
+            var ticket = store.Tickets.FindById(link.TicketId);
+            var attached = ticket is not null && ticket.BoardId == link.BoardId && ticket.Videos.Contains(link.VideoId);
+            var video = attached ? store.Images.FindById(link.VideoId) : null;
+            if (video is null)
+            {
+                throw new ApiException(404, "Video link not found or expired.");
+            }
+            link.Used = true;
+            store.VideoLinks.Update(link);
+            PurgeExpiredVideoLinks();
+            return (video.Content, video.ContentType);
+        }
+    }
+
+    private void PurgeExpiredVideoLinks()
+    {
+        var now = DateTime.UtcNow;
+        store.VideoLinks.DeleteMany(link => link.ExpiresAt <= now);
     }
 
     public void DeleteBoard(string id, ClaimsPrincipal user)
@@ -588,6 +702,7 @@ public sealed class BoardService(Store store, BoardEventHub? events = null)
             var audience = BoardAudience(board);
             store.Tickets.DeleteMany(ticket => ticket.BoardId == id);
             store.Images.DeleteMany(image => image.BoardId == id);
+            store.VideoLinks.DeleteMany(link => link.BoardId == id);
             store.Boards.Delete(id);
             store.AfterCommit(() => events?.Publish(id, audience), $"board:{id}");
         }
@@ -602,6 +717,7 @@ public sealed class BoardService(Store store, BoardEventHub? events = null)
             {
                 store.Images.Delete(image);
             }
+            store.VideoLinks.DeleteMany(link => link.TicketId == ticketId);
             store.Tickets.Delete(ticketId);
             PublishChange(boardId);
         }

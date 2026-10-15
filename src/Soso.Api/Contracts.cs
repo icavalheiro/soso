@@ -67,3 +67,7 @@ public sealed record DropboxAppKeyRequest([Required, MaxLength(200)] string AppK
 public sealed record BoardResponse(Board Board, Ticket[] Tickets, PersonResponse[] Members);
 /// <summary>Minimal member information without private preferences or email.</summary>
 public sealed record PersonResponse(string Id, string Name, string? AvatarId);
+/// <summary>Ticket attachment metadata. IDs match the ticket's images/videos fields.</summary>
+public sealed record AttachmentInfo(string Id, string Kind, string ContentType, long SizeBytes, long? ThumbnailSizeBytes);
+/// <summary>Single-use ticket-video download grant for plain-HTTP clients.</summary>
+public sealed record VideoDownloadLink(string Url, DateTime ExpiresAtUtc, string CurlExample);
