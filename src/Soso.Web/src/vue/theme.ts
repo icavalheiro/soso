@@ -1,7 +1,6 @@
 import type { MantineThemeOverride } from '@mantine-vue/core';
 
-// Wood palette, DM Sans and geometry shared with the React app (src/main.tsx).
-// Single source for the Vue tree; keep both entries in sync until the cutover.
+// Wood palette, DM Sans and geometry. Single source for the Vue tree.
 export const vueTheme: MantineThemeOverride = {
     fontFamily: 'DM Sans Variable, sans-serif',
     primaryColor: 'wood',

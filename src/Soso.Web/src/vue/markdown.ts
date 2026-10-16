@@ -3,9 +3,8 @@ import { Marked, Renderer } from 'marked';
 
 export type MarkdownMode = 'excerpt' | 'comment' | 'full';
 
-// Matches the react-markdown + remark-gfm behavior of the React app:
-// GFM (tables, strikethrough, task lists), raw HTML skipped, external images
-// dropped, javascript: links removed. Inline ticket images (/api/images/*)
+// Renders GFM (tables, strikethrough, task lists), skips raw HTML, drops external images
+// and removes javascript: links. Inline ticket images (/api/images/*)
 // render as preview buttons; the host component handles clicks with a
 // delegated listener on [data-image-id].
 function escapeAttr ( value: string ): string

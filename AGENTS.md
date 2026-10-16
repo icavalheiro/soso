@@ -1,6 +1,6 @@
 # Repository guidance
 
-- This repository contains Sosô, an open-source software-development kanban workspace built with ASP.NET Core 10 minimal APIs, LiteDB, React, TypeScript, Vite and Mantine. The web application, API and stateless bearer-authenticated MCP server are served together.
+- This repository contains Sosô, an open-source software-development kanban workspace built with ASP.NET Core 10 minimal APIs, LiteDB, Vue 3, TypeScript, Vite and Mantine Vue. The web application, API and stateless bearer-authenticated MCP server are served together.
 - Keep public READMEs concise and user-facing: describe what the project is, how it works at a high level, and provide a brief Docker CLI run example. Do not put detailed product rules, API/MCP contracts, security implementation notes, development/testing instructions or agent guidance in public READMEs; maintain agent-specific guidance here.
 - Keep board and MCP operations routed through `BoardService` so access checks and revision checks cannot diverge.
 - Preserve secure cookies and require TLS in production. Browser mutations require CSRF protection. Do not add public self-registration or browser cookie access to MCP.

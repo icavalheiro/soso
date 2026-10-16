@@ -9,9 +9,9 @@ export type LanguageState = {
 
 export const languageKey: InjectionKey<LanguageState> = Symbol( 'soso-language' );
 
-// Mirrors the React LanguageProvider (src/language.tsx): same storage key,
-// same navigator-based initial resolution, same documentElement.lang side effect,
-// same t() fallback semantics. Provided once by the Vue entry (vue/main.ts).
+// Persists the language under the 'soso-language' storage key, resolves the initial
+// language from saved preference then navigator languages, mirrors it to
+// documentElement.lang, and falls back to the source text in t(). Provided once by vue/main.ts.
 export function createLanguageState (): LanguageState
 {
     const saved = localStorage.getItem( 'soso-language' );

@@ -1,5 +1,5 @@
 // Shared i18n core: language resolution and trilingual dictionaries (en/pt-BR/es-MX).
-// Framework-agnostic: imported by both the React app (language.tsx) and the Vue app (vue/language.ts).
+// Framework-agnostic: imported by the Vue app (vue/language.ts).
 // English is the source language: t() returns the key itself when the active language is 'en'.
 
 export type Language = 'en' | 'pt-BR' | 'es-MX';

@@ -20,7 +20,7 @@
 
 Sosô is an open-source kanban workspace for organizing software development. It brings projects, tasks and collaboration together in a web application, with an integrated API and MCP server for connecting tools and language models.
 
-The application combines a React and TypeScript interface with an ASP.NET Core API. Boards and tasks are stored in an embedded LiteDB database, while the web application and API are served together by one container.
+The application combines a Vue and TypeScript interface with an ASP.NET Core API. Boards and tasks are stored in an embedded LiteDB database, while the web application and API are served together by one container.
 
 ## Run with Docker CLI
 

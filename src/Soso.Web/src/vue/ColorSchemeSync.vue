@@ -2,7 +2,7 @@
 import { onMounted, watch } from 'vue';
 import { useMantineColorScheme } from '@mantine-vue/core';
 
-// Mirrors React Mantine's color-scheme persistence: the explicit choice
+// Mantine color-scheme persistence: the explicit choice
 // survives reloads, while 'auto' keeps following the OS preference.
 const STORAGE_KEY = 'mantine-color-scheme';
 const { colorScheme, setColorScheme } = useMantineColorScheme();
