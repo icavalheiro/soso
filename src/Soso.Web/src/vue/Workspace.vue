@@ -547,7 +547,7 @@ function deleteTicket ( id: string, boardId: string )
     </aside>
     <main class="workspace">
       <header class="topbar">
-        <Group gap="6" wrap="nowrap" class="topbar-title">
+        <Group gap="6px" wrap="nowrap" class="topbar-title">
           <IconButton
             :label="t(collapsed ? 'Expand sidebar' : 'Collapse sidebar')" :expanded="!collapsed"
             controls="workspace-sidebar" @click="toggleSidebar()"
@@ -560,9 +560,9 @@ function deleteTicket ( id: string, boardId: string )
           <Text class="topbar-board-name" size="xs" :fw="600" truncate>{{ data?.board.name ?? t('Boards') }}</Text>
           <Badge v-if="data" class="board-ticket-count" variant="light" color="gray" size="sm">{{ filtered.length }} {{ t(filtered.length === 1 ? 'ticket' : 'tickets') }}</Badge>
         </Group>
-        <Group gap="4" wrap="nowrap" class="topbar-actions">
+        <Group gap="4px" wrap="nowrap" class="topbar-actions">
           <SearchInput v-if="data" :key="data.board.id" ref="searchBox" :on-query="publishQuery" />
-          <Group gap="4" wrap="nowrap">
+          <Group gap="4px" wrap="nowrap">
             <LanguageButton />
             <IconButton :label="t(colorScheme === 'dark' ? 'Light theme' : 'Dark theme')" @click="toggleTheme()">
               <Sun v-if="colorScheme === 'dark'" :size="15" />
@@ -575,7 +575,7 @@ function deleteTicket ( id: string, boardId: string )
       <template v-if="data">
         <section class="board-heading">
           <div class="board-title"><h1>{{ data.board.name }}</h1><p v-if="data.board.description">{{ data.board.description }}</p></div>
-          <Group class="board-actions" gap="6">
+          <Group class="board-actions" gap="6px">
             <AvatarGroup class="board-avatars">
               <Tooltip v-for="member in data.members.slice(0, 4)" :key="member.id" :label="member.name">
                 <Avatar :size="24" radius="xl" :src="imageUrl(member.avatarId)">{{ member.name.slice(0, 1) }}</Avatar>
@@ -617,7 +617,7 @@ function deleteTicket ( id: string, boardId: string )
     <Modal :opened="filtersOpen && data !== null" :title="t('Filters')" centered size="sm" @close="filtersOpen = false">
       <Stack>
         <div>
-          <Text size="sm" :fw="500" mb="8">{{ t('Tags') }}</Text>
+          <Text size="sm" :fw="500" mb="8px">{{ t('Tags') }}</Text>
           <div class="tag-filters">
             <button
               v-for="tag in tags" :key="tag.value" :class="`tag-filter ${tagFilter.includes(tag.value) ? 'selected' : ''}`"

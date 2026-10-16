@@ -9,7 +9,7 @@ const iconColor = useBoardColor( toRef( props, 'color', 'teal' ) );
 </script>
 
 <template>
-  <Stack gap="6">
+  <Stack gap="6px">
     <Group gap="xs">
       <Text size="sm" :fw="500" id="board-icon-label">Icon</Text>
       <BoardIcon :icon="value" :color="color" :size="20" />

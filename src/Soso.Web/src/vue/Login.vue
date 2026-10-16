@@ -46,7 +46,7 @@ async function submit ( event: Event )
     <div class="login-brand">
       <img src="/logo.png" alt="Sosô" />
       <h1>Sosô</h1>
-      <Group gap="4" wrap="nowrap">
+      <Group gap="4px" wrap="nowrap">
         <LanguageButton />
         <IconButton :label="t(colorScheme === 'dark' ? 'Light theme' : 'Dark theme')" @click="setColorScheme(colorScheme === 'dark' ? 'light' : 'dark')">
           <Sun v-if="colorScheme === 'dark'" :size="15" />

@@ -106,7 +106,7 @@ function reorder ( index: number, direction: number )
               </Tooltip>
             </Group>
             <Checkbox
-              :mt="7" size="xs" :label="t('Completed column')" :checked="column.isDone"
+              mt="7px" size="xs" :label="t('Completed column')" :checked="column.isDone"
               @update:checked="isDone => { columns = columns.map(item => item.id === column.id ? { ...item, isDone: Boolean(isDone) } : item); }"
             />
           </div>

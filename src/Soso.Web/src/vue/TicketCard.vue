@@ -78,7 +78,7 @@ function onHandleKey ( event: KeyboardEvent )
       <img v-if="ticket.images[0]" class="ticket-cover" :src="imageUrl(ticket.images[0])" :alt="ticket.title" loading="lazy" />
       <div class="ticket-content">
         <div class="ticket-meta">
-          <Group gap="4">
+          <Group gap="4px">
             <span v-for="value in ticket.tags" :key="value" class="tag-chip">
               <i :style="{ background: tags.find(tag => tag.value === value)?.color }" />{{ tags.find(tag => tag.value === value)?.label ?? value }}
             </span>
@@ -88,9 +88,9 @@ function onHandleKey ( event: KeyboardEvent )
         </div>
         <h3 :class="completed ? 'completed-title' : ''">{{ ticket.title }}</h3>
         <MarkdownText v-if="ticket.description" class="ticket-excerpt" :source="ticket.description" mode="excerpt" />
-        <Progress v-if="ticket.subtasks.length > 0" :value="done / ticket.subtasks.length * 100" :color="done === ticket.subtasks.length ? 'teal' : 'yellow'" :size="3" :mt="12" :mb="8" />
+        <Progress v-if="ticket.subtasks.length > 0" :value="done / ticket.subtasks.length * 100" :color="done === ticket.subtasks.length ? 'teal' : 'yellow'" size="3px" mt="12px" mb="8px" />
         <div class="ticket-footer">
-          <Group gap="9">
+          <Group gap="9px">
             <span class="ticket-id">{{ ticketKey(data.board, ticket) }}</span>
             <span v-if="ticket.subtasks.length > 0" class="ticket-type"><CheckSquare :size="12" />{{ done }}/{{ ticket.subtasks.length }}</span>
             <span v-if="ticket.comments.length > 0" class="ticket-type"><MessageSquare :size="12" />{{ ticket.comments.length }}</span>

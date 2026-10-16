@@ -11,7 +11,7 @@ const shade = computed( () => scheme.value === 'dark' ? 4 : 7 );
 </script>
 
 <template>
-  <Stack gap="6">
+  <Stack gap="6px">
     <Text size="sm" :fw="500" id="board-color-label">Color</Text>
     <div class="board-color-picker" role="group" aria-labelledby="board-color-label">
       <Tooltip v-for="{ value: color, label } in boardColors" :key="color" :label="label">

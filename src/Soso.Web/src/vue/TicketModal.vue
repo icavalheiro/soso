@@ -497,7 +497,7 @@ const statusColumns = () => removedColumn() ? [ ...props.data.board.columns, rem
                   <Text size="sm" :fw="600"><CheckSquare :size="15" class="inline-icon" /> {{ t('Subtasks') }}</Text>
                   <Text c="dimmed" size="xs">{{ doneCount() }} / {{ draft.subtasks.length }}</Text>
                 </Group>
-                <Progress v-if="draft.subtasks.length > 0" :size="4" :value="doneCount() / draft.subtasks.length * 100" mb="md" />
+                <Progress v-if="draft.subtasks.length > 0" size="4px" :value="doneCount() / draft.subtasks.length * 100" mb="md" />
                 <draggable
                   :list="draft.subtasks" item-key="id" handle=".subtask-drag-handle" draggable=".subtask-row" :animation="180"
                   @change="liveMessage = 'Subtask order updated.'"
@@ -527,7 +527,7 @@ const statusColumns = () => removedColumn() ? [ ...props.data.board.columns, rem
               <section>
                 <Group justify="space-between" mb="sm">
                   <Text size="sm" :fw="600">{{ t('Attachments') }}</Text>
-                  <Group gap="4">
+                  <Group gap="4px">
                     <FileButton accept="image/png,image/jpeg,image/webp" @change="file => { if (file) { void action(async () => { await uploadImages([file as File]); }); } }">
                       <template #default="{ onClick }">
                         <Button size="xs" variant="subtle" :disabled="busy || draft.images.length + (draft.videos?.length ?? 0) >= 6" @click="onClick()">
