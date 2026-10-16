@@ -751,6 +751,11 @@ test( 'drag lift animation and cross-column move', async ( { page }, testInfo ) 
     await page.mouse.down();
     await page.mouse.move( box!.x + 30, box!.y + 25, { steps: 5 } );
     await expect( page.locator( '.drag-overlay' ) ).toBeVisible();
+    const sourceCard = await page.locator( '.ticket' ).filter( { hasText: 'Plan sprint goals' } ).first().boundingBox();
+    const overlayCard = await page.locator( '.drag-overlay' ).boundingBox();
+    expect( sourceCard ).not.toBeNull();
+    expect( overlayCard ).not.toBeNull();
+    expect( Math.abs( overlayCard!.width - sourceCard!.width ) ).toBeLessThanOrEqual( 4 );
     await page.screenshot( { path: testInfo.outputPath( 'dragging.png' ) } );
     await page.mouse.move( destination!.x + 100, destination!.y + destination!.height - 20, { steps: 12 } );
     await page.mouse.up();

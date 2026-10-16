@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 import draggable from 'vuedraggable';
 import { ActionIcon, Tooltip } from '@mantine-vue/core';
 import { Plus } from 'lucide-vue-next';
@@ -19,6 +19,7 @@ const { t } = useLanguage();
 const lists = reactive<Record<string, Ticket[]>>( {} );
 const dragging = ref( false );
 const dragged = ref<Ticket | null>( null );
+const draggedWidth = ref<number | null>( null );
 const overColumn = ref<string | null>( null );
 const grabbedId = ref<string | null>( null );
 const liveMessage = ref( '' );
@@ -76,8 +77,19 @@ function onStart ( event: { item?: Element } )
     dragging.value = true;
     const id = event.item?.getAttribute?.( 'data-ticket-id' );
     dragged.value = props.tickets.find( ticket => ticket.id === id ) ?? null;
+    draggedWidth.value = event.item?.getBoundingClientRect?.().width ?? null;
     window.addEventListener( 'mousemove', trackPointer );
 }
+
+const overlayLeft = computed( () =>
+{
+    const left = pointer.value.x + 12;
+    if ( draggedWidth.value === null )
+    {
+        return left;
+    }
+    return Math.max( 0, Math.min( left, window.innerWidth - draggedWidth.value - 12 ) );
+} );
 
 function trackPointer ( event: MouseEvent )
 {
@@ -90,6 +102,7 @@ function onEnd ()
 {
     dragging.value = false;
     dragged.value = null;
+    draggedWidth.value = null;
     overColumn.value = null;
     window.removeEventListener( 'mousemove', trackPointer );
 }
@@ -191,7 +204,7 @@ function onNavigate ( ticket: Ticket, key: CardNavKey )
       </div>
     </section>
   </div>
-  <div v-if="dragged" class="drag-overlay" :style="{ left: `${pointer.x + 12}px`, top: `${pointer.y + 12}px`, position: 'fixed', zIndex: 1000, pointerEvents: 'none' }">
+  <div v-if="dragged" class="drag-overlay" :style="{ left: `${overlayLeft}px`, top: `${pointer.y + 12}px`, width: draggedWidth ? `${draggedWidth}px` : undefined, position: 'fixed', zIndex: 1000, pointerEvents: 'none' }">
     <TicketCard :ticket="dragged" :data="data" :grabbed="false" :on-open="() => {}" :on-grab="() => {}" :on-navigate="() => {}" />
   </div>
   <div class="sr-only" role="status" aria-live="polite">{{ liveMessage }}</div>
