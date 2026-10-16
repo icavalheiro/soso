@@ -125,7 +125,7 @@ async function action ( work: () => Promise<void> )
         <form @submit.prevent="action(async () => { const updated = await api<Account>('/auth/profile', 'PUT', { name: name, theme: theme, settings: settings }); onChange(updated); setColorScheme(theme); onClose(); })">
           <Stack>
             <Group>
-              <Avatar size="64" radius="xl" :src="imageUrl(account.avatarId)">{{ account.name.slice(0, 2) }}</Avatar>
+              <Avatar size="64px" radius="xl" :src="imageUrl(account.avatarId)">{{ account.name.slice(0, 2) }}</Avatar>
               <FileButton
                 :reset-ref="photoReset" accept="image/png,image/jpeg,image/webp"
                 @change="onPhotoSelected"
