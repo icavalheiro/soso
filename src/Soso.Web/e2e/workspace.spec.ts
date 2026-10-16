@@ -214,9 +214,9 @@ for ( const width of [ 1366, 390 ] )
         await expect( page.getByText( 'No board access', { exact: true } ) ).toBeVisible();
         const save = page.getByRole( 'button', { name: 'Save boards for Integration', exact: true } );
         await expect( save ).toBeDisabled();
-        await page.getByRole( 'combobox', { name: 'Assigned boards for Integration', exact: true } ).click();
+        await page.getByRole( 'combobox', { name: 'Assigned boards', exact: true } ).click();
         await page.getByRole( 'option', { name: state.data.board.name, exact: true } ).click();
-        await page.getByRole( 'combobox', { name: 'Assigned boards for Integration', exact: true } ).press( 'Escape' );
+        await page.getByRole( 'combobox', { name: 'Assigned boards', exact: true } ).press( 'Escape' );
         const assignment = page.waitForRequest( request => request.method() === 'PUT' && request.url().endsWith( '/boards' ) );
         await save.click();
         expect( ( await assignment ).postDataJSON() ).toEqual( { boardIds: [ state.data.board.id ] } );
@@ -228,7 +228,7 @@ for ( const width of [ 1366, 390 ] )
         await expect( page.getByText( '1 assigned', { exact: true } ) ).toBeVisible();
         await page.screenshot( { path: testInfo.outputPath( 'mcp-board-assignments.png' ) } );
         expect( await page.locator( '.token-row' ).evaluate( element => element.scrollWidth <= element.clientWidth ) ).toBeTruthy();
-        await page.getByRole( 'button', { name: 'Clear boards for Integration', exact: true } ).click();
+        await page.locator( '.token-row .mantine-InputClearButton-root' ).click();
         const removal = page.waitForRequest( request => request.method() === 'PUT' && request.url().endsWith( '/boards' ) );
         await save.click();
         expect( ( await removal ).postDataJSON() ).toEqual( { boardIds: [] } );
@@ -425,7 +425,7 @@ test( 'ticket tag names stay in English in the localized editor', async ( { page
 
     const dialog = page.getByRole( 'dialog' );
     await expect( dialog.getByText( 'Etiquetas', { exact: true } ) ).toBeVisible();
-    await expect( dialog.locator( '.mantine-MultiSelect-pill' ) ).toHaveText( 'Design' );
+    await expect( dialog.locator( '.mantine-Pill-label' ) ).toHaveText( 'Design' );
     await dialog.getByRole( 'combobox', { name: 'Etiquetas' } ).click();
     await expect( page.getByRole( 'option', { name: 'Bug', exact: true } ) ).toBeVisible();
     await expect( page.getByRole( 'option', { name: 'Feature', exact: true } ) ).toBeVisible();
@@ -1201,7 +1201,7 @@ for ( const viewport of [ { name: 'desktop', width: 1366, height: 900 }, { name:
         await expect( page.locator( 'html' ) ).toHaveAttribute( 'data-mantine-color-scheme', 'dark' );
         await page.screenshot( { path: testInfo.outputPath( `${ viewport.name }-dark.png` ) } );
         await page.getByRole( 'button', { name: 'Open ticket: Sketch the board layout', exact: true } ).click();
-        await expect( page.getByText( 'Sketch the board layout', { exact: true } ) ).toBeVisible();
+        await expect( page.getByRole( 'dialog' ).getByText( 'Sketch the board layout', { exact: true } ) ).toBeVisible();
         await page.getByRole( 'button', { name: 'Edit title', exact: true } ).click();
         await expect( page.getByLabel( 'Ticket title', { exact: true } ) ).toBeVisible();
         await page.screenshot( { path: testInfo.outputPath( `${ viewport.name }-ticket.png` ) } );
