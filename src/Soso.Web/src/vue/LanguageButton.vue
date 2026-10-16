@@ -20,7 +20,7 @@ const opened = ref( false );
     </PopoverTarget>
     <PopoverDropdown :aria-label="t('Choose language')" p="xs">
       <Stack gap="4px">
-        <Button :variant="language === 'en' ? 'light' : 'subtle'" justify="flex-start" size="xs" @click="setLanguage('en'); opened = false;"><span aria-hidden="true">🇺🇸</span>&nbsp; {{ t('English') }}</Button>
+        <Button :variant="language === 'en' ? 'light' : 'subtle'" justify="flex-start" size="xs" @click="setLanguage('en'); opened = false;"><span aria-hidden="true">🇺🇳</span>&nbsp; {{ t('English') }}</Button>
         <Button :variant="language === 'pt-BR' ? 'light' : 'subtle'" justify="flex-start" size="xs" @click="setLanguage('pt-BR'); opened = false;"><span aria-hidden="true">🇧🇷</span>&nbsp; {{ t('Português (Brasil)') }}</Button>
         <Button :variant="language === 'es-MX' ? 'light' : 'subtle'" justify="flex-start" size="xs" @click="setLanguage('es-MX'); opened = false;"><span aria-hidden="true">🇲🇽</span>&nbsp; {{ t('Español (México)') }}</Button>
       </Stack>
