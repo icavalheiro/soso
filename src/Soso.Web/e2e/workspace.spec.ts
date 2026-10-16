@@ -1083,6 +1083,32 @@ test( 'completed and archived tasks can be archived and restored', async ( { pag
     await expect( page.locator( '.archive-row' ) ).toHaveCount( 1 );
 } );
 
+test( 'all tickets of a column can be archived after confirmation', async ( { page } ) =>
+{
+    const state = await installApiMock( page );
+    const column = state.data.board.columns.find( item => state.data.tickets.some( ticket => ticket.columnId === item.id && !ticket.archived ) ) ?? state.data.board.columns[ 0 ];
+    const activeInColumn = state.data.tickets.filter( ticket => ticket.columnId === column.id && !ticket.archived ).length;
+    const activeTotal = state.data.tickets.filter( ticket => !ticket.archived ).length;
+    const archiveColumn = page.getByRole( 'button', { name: `Archive all tickets: ${ column.name }`, exact: true } );
+    await page.goto( '/' );
+    await expect( page.locator( '.ticket' ) ).toHaveCount( activeTotal, { timeout: 10_000 } );
+
+    await archiveColumn.click();
+    const dialog = page.getByRole( 'dialog' );
+    await expect( dialog ).toBeVisible( { timeout: 10_000 } );
+    await dialog.getByRole( 'button', { name: 'Cancel', exact: true } ).click();
+    await expect( dialog ).toBeHidden( { timeout: 10_000 } );
+    await expect( page.locator( '.ticket' ) ).toHaveCount( activeTotal, { timeout: 10_000 } );
+
+    await archiveColumn.click();
+    await expect( dialog ).toBeVisible( { timeout: 10_000 } );
+    await dialog.getByRole( 'button', { name: 'Archive all', exact: true } ).click();
+    await expect( page.locator( '.ticket' ) ).toHaveCount( activeTotal - activeInColumn, { timeout: 10_000 } );
+    await expect( dialog ).toBeHidden( { timeout: 10_000 } );
+    await expect( archiveColumn ).toBeDisabled( { timeout: 10_000 } );
+    expect( state.data.tickets.filter( ticket => ticket.columnId === column.id && !ticket.archived ) ).toHaveLength( 0 );
+} );
+
 test( 'boards have deep links and the address bar follows board selection', async ( { page } ) =>
 {
     const state = await installApiMock( page );

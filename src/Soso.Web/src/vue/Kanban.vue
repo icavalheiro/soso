@@ -2,8 +2,8 @@
 import { computed, reactive, ref, watch } from 'vue';
 import draggable from 'vuedraggable';
 import { ActionIcon, Tooltip } from '@mantine-vue/core';
-import { Plus } from 'lucide-vue-next';
-import type { BoardData, Ticket } from '../api';
+import { Archive, Plus } from 'lucide-vue-next';
+import type { BoardData, Column, Ticket } from '../api';
 import TicketCard, { type CardNavKey } from './TicketCard.vue';
 import { useLanguage } from './language';
 
@@ -12,9 +12,15 @@ const props = defineProps<{
     tickets: Ticket[];
     onOpen: ( ticket: Ticket ) => void;
     onCreate: ( column: string ) => void;
+    onArchive: ( column: Column ) => void;
     onMove: ( ticket: Ticket, columnId: string, position: number ) => Promise<void>;
 }>();
 const { t } = useLanguage();
+
+function activeCount ( columnId: string )
+{
+    return props.data.tickets.filter( ticket => ticket.columnId === columnId && !ticket.archived ).length;
+}
 
 const lists = reactive<Record<string, Ticket[]>>( {} );
 const dragging = ref( false );
@@ -181,6 +187,14 @@ function onNavigate ( ticket: Ticket, key: CardNavKey )
             @click="onCreate(column.id)"
           >
             <Plus :size="16" />
+          </ActionIcon>
+        </Tooltip>
+        <Tooltip :label="t('Archive all tickets')">
+          <ActionIcon
+            variant="subtle" color="gray" :aria-label="`${t('Archive all tickets')}: ${column.name}`" size="sm"
+            :disabled="activeCount(column.id) === 0" @click="onArchive(column)"
+          >
+            <Archive :size="16" />
           </ActionIcon>
         </Tooltip>
       </header>

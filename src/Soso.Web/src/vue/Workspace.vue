@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { Avatar, AvatarGroup, Badge, Button, Group, Loader, Modal, Select, Stack, Text, Tooltip, useComputedColorScheme, useMantineColorScheme } from '@mantine-vue/core';
 import { Archive, Columns3, LogOut, Moon, PanelLeftClose, PanelLeftOpen, Plus, Settings, SlidersHorizontal, Sun, Users, DatabaseBackup } from 'lucide-vue-next';
 import { api, ApiError, refreshCsrf, imageUrl, ticketBody, ticketKey, tags, connectBoardEvents, boardPath, slugFromPath } from '../api';
-import type { Account, Board, BoardData, Ticket } from '../api';
+import type { Account, Board, BoardData, Column, Ticket } from '../api';
 import { reportError } from './feedback';
 import BoardIcon from './BoardIcon.vue';
 import NewTicketModal from './NewTicketModal.vue';
@@ -41,6 +41,8 @@ const tagFilter = ref<string[]>( [] );
 const assignee = ref( 'all' );
 const filtersOpen = ref( false );
 const archive = ref( false );
+const archiveColumn = ref<Column | null>( null );
+const archivingColumn = ref( false );
 const selected = ref<Ticket | null>( null );
 const createdTicketId = ref<string | null>( null );
 const boardModal = ref<'create' | 'edit' | null>( null );
@@ -474,6 +476,32 @@ async function createTicket ( title: string, columnId: string )
     }
 }
 
+async function archiveAllTickets ( column: Column )
+{
+    const boardId = activeId.value;
+    archivingColumn.value = true;
+    try
+    {
+        const archived = await api<Ticket[]>( `/boards/${ boardId }/columns/${ column.id }/archive`, 'POST' );
+        const previous = loadedData.value;
+        if ( previous?.board.id === boardId )
+        {
+            loadedData.value = { ...previous, tickets: previous.tickets.map( ticket => archived.find( item => item.id === ticket.id ) ?? ticket ) };
+        }
+        archiveColumn.value = null;
+        requestSync( boardId );
+    }
+    catch ( error )
+    {
+        reportError( error );
+        requestSync( boardId );
+    }
+    finally
+    {
+        archivingColumn.value = false;
+    }
+}
+
 async function toggleTheme ()
 {
     const next = colorScheme.value === 'dark' ? 'light' : 'dark';
@@ -600,6 +628,7 @@ function deleteTicket ( id: string, boardId: string )
           :data="data" :tickets="filtered"
           :on-open="ticket => { createdTicketId = null; selected = ticket; }"
           :on-create="column => { newColumn = column; }" :on-move="move"
+          :on-archive="column => { archiveColumn = column; }"
         />
       </template>
       <div v-else class="empty-workspace">
@@ -662,6 +691,16 @@ function deleteTicket ( id: string, boardId: string )
       v-if="archive && data" :data="data" :on-close="() => { archive = false; }"
       :on-open="ticket => { createdTicketId = null; selected = ticket; }" :on-change="changed"
     />
+    <Modal v-if="archiveColumn" :opened="true" :title="t('Archive all tickets')" centered size="sm" @close="archiveColumn = null">
+      <Stack>
+        <Text size="sm">{{ archiveColumn.name }} · {{ data ? data.tickets.filter(ticket => ticket.columnId === archiveColumn?.id && !ticket.archived).length : 0 }} {{ t('tickets') }}</Text>
+        <Text size="sm" c="dimmed">{{ t('Archived tickets can be restored from the archive list.') }}</Text>
+        <Group justify="space-between">
+          <Button variant="subtle" :disabled="archivingColumn" @click="archiveColumn = null">{{ t('Cancel') }}</Button>
+          <Button :loading="archivingColumn" @click="archiveAllTickets(archiveColumn)">{{ t('Archive all') }}</Button>
+        </Group>
+      </Stack>
+    </Modal>
     <NewTicketModal v-if="newColumn !== null" :column="newColumn" :columns="data?.board.columns ?? []" :on-close="() => { newColumn = null; }" :on-create="createTicket" />
   </div>
 </template>

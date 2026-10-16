@@ -348,6 +348,34 @@ public sealed class BoardService(Store store, BoardEventHub? events = null)
         });
     }
 
+    /// <summary>Archives every active ticket of one active column in a single transaction. Returns the tickets archived by this call.</summary>
+    public Ticket[] ArchiveColumnTickets(string boardId, string columnId, ClaimsPrincipal user)
+    {
+        return store.Transaction(() =>
+        {
+            var board = RequireBoard(boardId, user);
+            if (board.Columns.All(column => column.Id != columnId))
+            {
+                throw new ApiException(404, "Column not found.");
+            }
+            var tickets = store.Tickets.Find(ticket => ticket.BoardId == boardId && ticket.ColumnId == columnId && !ticket.Archived)
+                .OrderBy(ticket => ticket.Position).ThenBy(ticket => ticket.Id, StringComparer.Ordinal)
+                .ToArray();
+            foreach (var ticket in tickets)
+            {
+                TrackChange(ticket, user, "archived", "False", "True");
+                ticket.Archived = true;
+                ticket.Revision++;
+                store.Tickets.Update(ticket);
+            }
+            if (tickets.Length > 0)
+            {
+                PublishChange(boardId);
+            }
+            return tickets;
+        });
+    }
+
     public TicketSearchResponse SearchTickets(string query, ClaimsPrincipal user, string? boardId = null, bool includeArchived = false, int offset = 0, int limit = 50)
     {
         var text = Text(query, 200);

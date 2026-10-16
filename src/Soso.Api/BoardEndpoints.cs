@@ -26,6 +26,7 @@ public static class BoardEndpoints
             return TypedResults.Created($"/api/boards/{id}/tickets/{ticket.Id}", ticket);
         });
         boards.MapPut("/{id}/tickets/{ticketId}", (string id, string ticketId, UpdateTicketRequest request, ClaimsPrincipal user, BoardService service) => TypedResults.Ok(service.UpdateTicket(id, ticketId, request, user)));
+        boards.MapPost("/{id}/columns/{columnId}/archive", (string id, string columnId, ClaimsPrincipal user, BoardService service) => TypedResults.Ok(service.ArchiveColumnTickets(id, columnId, user)));
         boards.MapDelete("/{id}/tickets/{ticketId}", (string id, string ticketId, ClaimsPrincipal user, BoardService service) =>
         {
             service.DeleteTicket(id, ticketId, user);

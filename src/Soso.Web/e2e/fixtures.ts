@@ -162,6 +162,17 @@ export async function installApiMock ( page: Page, authenticated = true )
         {
             return route.fulfill( { path: 'public/logo.png', contentType: 'image/jpeg' } );
         }
+        const archiveMatch = /^\/api\/boards\/[^/]+\/columns\/([^/]+)\/archive$/.exec( path );
+        if ( archiveMatch && method === 'POST' )
+        {
+            const archived = state.data.tickets.filter( ticket => ticket.columnId === archiveMatch[ 1 ] && !ticket.archived );
+            for ( const ticket of archived )
+            {
+                ticket.archived = true;
+                ticket.revision++;
+            }
+            return reply( archived );
+        }
         const ticket = state.data.tickets.find( ticket => path.includes( `/tickets/${ ticket.id }` ) );
         if ( ticket && method === 'PUT' )
         {
