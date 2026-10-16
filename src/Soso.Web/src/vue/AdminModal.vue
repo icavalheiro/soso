@@ -97,7 +97,7 @@ function editAccount ( account: Account )
         <Stack gap="0">
           <Group v-for="account in accounts" :key="account.id" justify="space-between" class="account-row" wrap="nowrap">
             <Group gap="sm" wrap="nowrap" :style="{ minWidth: 0 }">
-              <Avatar :src="imageUrl(account.avatarId)" radius="xl" :size="32">{{ account.name.slice(0, 1) }}</Avatar>
+              <Avatar :src="imageUrl(account.avatarId)" radius="xl" size="32px">{{ account.name.slice(0, 1) }}</Avatar>
               <div class="account-info">
                 <Text size="sm" :fw="500" truncate>{{ account.name }}</Text>
                 <Text size="xs" c="dimmed" truncate>{{ account.email }}</Text>

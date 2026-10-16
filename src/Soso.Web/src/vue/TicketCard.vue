@@ -97,7 +97,7 @@ function onHandleKey ( event: KeyboardEvent )
             <span v-if="ticket.dueDate" :class="`ticket-type ${overdue ? 'overdue' : ''}`"><CalendarDays :size="12" />{{ new Date(ticket.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) }}</span>
           </Group>
           <span v-if="assignee" class="ticket-assignee">
-            <Avatar :size="20" radius="xl" :src="imageUrl(assignee.avatarId)">{{ assignee.name.slice(0, 1) }}</Avatar>{{ assignee.name.split(' ')[0] }}
+            <Avatar size="20px" radius="xl" :src="imageUrl(assignee.avatarId)">{{ assignee.name.slice(0, 1) }}</Avatar>{{ assignee.name.split(' ')[0] }}
           </span>
         </div>
       </div>

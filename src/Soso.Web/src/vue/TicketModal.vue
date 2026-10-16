@@ -579,7 +579,7 @@ const statusColumns = () => removedColumn() ? [ ...props.data.board.columns, rem
                 <Text size="sm" :fw="600" mb="md"><MessageSquare :size="15" class="inline-icon" /> {{ t('Comments') }}</Text>
                 <Stack gap="md">
                   <div v-for="item in draft.comments" :key="item.id" class="comment">
-                    <Avatar size="28" radius="xl" :src="imageUrl(data.members.find(member => member.id === item.authorId)?.avatarId)">
+                    <Avatar size="28px" radius="xl" :src="imageUrl(data.members.find(member => member.id === item.authorId)?.avatarId)">
                       {{ data.members.find(member => member.id === item.authorId)?.name.slice(0, 1) ?? '?' }}
                     </Avatar>
                     <div class="comment-body">
@@ -622,7 +622,7 @@ const statusColumns = () => removedColumn() ? [ ...props.data.board.columns, rem
                 </summary>
                 <Stack gap="sm" mt="md">
                   <div v-for="item in [...(draft.activity ?? [])].reverse()" :key="item.id" class="activity-item">
-                    <Avatar size="24" radius="xl">{{ item.actorName.slice(0, 1).toUpperCase() }}</Avatar>
+                    <Avatar size="24px" radius="xl">{{ item.actorName.slice(0, 1).toUpperCase() }}</Avatar>
                     <div class="activity-body">
                       <Text size="xs"><strong>{{ item.actorName }}</strong> {{ activityText(item) }}</Text>
                       <Text v-if="item.action === 'comment_added' && item.newValue" size="xs" c="dimmed" class="activity-detail">{{ item.newValue }}</Text>

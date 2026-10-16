@@ -540,7 +540,7 @@ function deleteTicket ( id: string, boardId: string )
         <button v-if="account.isAdmin" class="board-link" :aria-label="t('Backup')" @click="backup = true"><DatabaseBackup :size="18" /><span>{{ t('Backup') }}</span></button>
         <button class="board-link" :aria-label="t('Profile & settings')" @click="profile = true"><Settings :size="18" /><span>{{ t('Profile & settings') }}</span></button>
         <button class="account-button" :aria-label="t('Open profile')" @click="profile = true">
-          <Avatar :src="imageUrl(account.avatarId)" :size="32" radius="xl">{{ account.name.slice(0, 2).toUpperCase() }}</Avatar>
+          <Avatar :src="imageUrl(account.avatarId)" size="32px" radius="xl">{{ account.name.slice(0, 2).toUpperCase() }}</Avatar>
           <span><strong>{{ account.name }}</strong><small>{{ t(account.isAdmin ? 'Administrator' : 'Member') }}</small></span>
         </button>
       </div>
@@ -578,7 +578,7 @@ function deleteTicket ( id: string, boardId: string )
           <Group class="board-actions" gap="6px">
             <AvatarGroup class="board-avatars">
               <Tooltip v-for="member in data.members.slice(0, 4)" :key="member.id" :label="member.name">
-                <Avatar :size="24" radius="xl" :src="imageUrl(member.avatarId)">{{ member.name.slice(0, 1) }}</Avatar>
+                <Avatar size="24px" radius="xl" :src="imageUrl(member.avatarId)">{{ member.name.slice(0, 1) }}</Avatar>
               </Tooltip>
             </AvatarGroup>
             <IconButton v-if="canManage" :label="t('Board settings')" @click="boardModal = 'edit'"><Settings :size="16" /></IconButton>
