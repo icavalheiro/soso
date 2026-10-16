@@ -207,7 +207,8 @@ app.MapFallback(async context =>
 {
     var isBackend = context.Request.Path.StartsWithSegments("/api") || context.Request.Path.StartsWithSegments("/mcp");
     var isNavigation = HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method);
-    var file = Path.Combine(app.Environment.WebRootPath ?? "wwwroot", "index.html");
+    var webRoot = app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot");
+    var file = Path.Combine(webRoot, "index.html");
     if (isBackend || !isNavigation || !File.Exists(file))
     {
         context.Response.StatusCode = 404;
