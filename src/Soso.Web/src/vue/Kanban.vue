@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue';
+import { reactive, ref, watch } from 'vue';
 import draggable from 'vuedraggable';
 import { ActionIcon, Tooltip } from '@mantine-vue/core';
 import { Archive, Plus } from 'lucide-vue-next';
@@ -24,12 +24,9 @@ function activeCount ( columnId: string )
 
 const lists = reactive<Record<string, Ticket[]>>( {} );
 const dragging = ref( false );
-const dragged = ref<Ticket | null>( null );
-const draggedWidth = ref<number | null>( null );
 const overColumn = ref<string | null>( null );
 const grabbedId = ref<string | null>( null );
 const liveMessage = ref( '' );
-const pointer = ref( { x: 0, y: 0 } );
 
 function syncLists ()
 {
@@ -78,28 +75,14 @@ function positionBetween ( list: Ticket[], selfId: string, index: number ): numb
     return ( before + after ) / 2;
 }
 
-function onStart ( event: { item?: Element } )
+function onStart ()
 {
     dragging.value = true;
-    const id = event.item?.getAttribute?.( 'data-ticket-id' );
-    dragged.value = props.tickets.find( ticket => ticket.id === id ) ?? null;
-    draggedWidth.value = event.item?.getBoundingClientRect?.().width ?? null;
     window.addEventListener( 'mousemove', trackPointer );
 }
 
-const overlayLeft = computed( () =>
-{
-    const left = pointer.value.x + 12;
-    if ( draggedWidth.value === null )
-    {
-        return left;
-    }
-    return Math.max( 0, Math.min( left, window.innerWidth - draggedWidth.value - 12 ) );
-} );
-
 function trackPointer ( event: MouseEvent )
 {
-    pointer.value = { x: event.clientX, y: event.clientY };
     const hit = document.elementFromPoint( event.clientX, event.clientY )?.closest( 'section.kanban-column' );
     overColumn.value = hit?.getAttribute( 'data-column-id' ) ?? null;
 }
@@ -107,8 +90,6 @@ function trackPointer ( event: MouseEvent )
 function onEnd ()
 {
     dragging.value = false;
-    dragged.value = null;
-    draggedWidth.value = null;
     overColumn.value = null;
     window.removeEventListener( 'mousemove', trackPointer );
 }
@@ -201,7 +182,9 @@ function onNavigate ( ticket: Ticket, key: CardNavKey )
       <div class="column-body">
         <draggable
           :list="lists[column.id] ?? []" group="tickets" item-key="id" handle=".drag-handle"
-          draggable=".ticket" ghost-class="ticket-ghost" :animation="180" @start="onStart" @end="onEnd"
+          draggable=".ticket" ghost-class="ticket-ghost"
+          force-fallback="true" fallback-class="ticket-fallback" fallback-on-body="true"
+          :fallback-tolerance="3" :animation="180" @start="onStart" @end="onEnd"
           @change="(event: any) => { onChange(column.id, event); }"
         >
           <template #item="{ element }">
@@ -217,9 +200,6 @@ function onNavigate ( ticket: Ticket, key: CardNavKey )
         </draggable>
       </div>
     </section>
-  </div>
-  <div v-if="dragged" class="drag-overlay" :style="{ left: `${overlayLeft}px`, top: `${pointer.y + 12}px`, width: draggedWidth ? `${draggedWidth}px` : undefined, position: 'fixed', zIndex: 1000, pointerEvents: 'none' }">
-    <TicketCard :ticket="dragged" :data="data" :grabbed="false" :on-open="() => {}" :on-grab="() => {}" :on-navigate="() => {}" />
   </div>
   <div class="sr-only" role="status" aria-live="polite">{{ liveMessage }}</div>
 </template>

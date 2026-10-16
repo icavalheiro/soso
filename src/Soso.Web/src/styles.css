@@ -416,8 +416,7 @@ button:focus-visible {
     font-size: 9px;
     color: var(--muted);
 }
-.ticket h3,
-.drag-overlay h3 {
+.ticket h3 {
     margin: 8px 0 5px;
     font-size: 12px;
     line-height: 1.5;
@@ -464,22 +463,14 @@ button:focus-visible {
     cursor: grab;
     touch-action: none;
 }
-.drag-overlay {
-    background: var(--card);
-    color: var(--text);
+.ticket-fallback {
     box-shadow: 0 12px 30px #0003;
-    border-radius: 7px;
-    border: 1px solid var(--accent);
-    transform: rotate(1deg) scale(1.025);
-    animation: card-lift 140ms ease-out;
-}
-@keyframes card-lift {
-    from {
-        transform: rotate(0) scale(1);
-    }
-    to {
-        transform: rotate(1deg) scale(1.025);
-    }
+    border-color: var(--accent);
+    rotate: 1deg;
+    scale: 1.025;
+    pointer-events: none;
+    box-sizing: border-box;
+    margin-bottom: 0;
 }
 .ticket-ghost {
     opacity: 0.25;
